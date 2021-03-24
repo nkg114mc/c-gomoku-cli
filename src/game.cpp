@@ -1,17 +1,19 @@
-/*
- * c-chess-cli, a command line interface for UCI chess engines. Copyright 2020 lucasart.
- *
- * c-chess-cli is free software: you can redistribute it and/or modify it under the terms of the GNU
- * General Public License as published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * c-chess-cli is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with this program. If
- * not, see <http://www.gnu.org/licenses/>.
-*/
+/* 
+ *  c-gomoku-cli, a command line interface for Gomocup engines. Copyright 2021 Chao Ma.
+ *  c-gomoku-cli is derived from c-chess-cli, originally authored by lucasart 2020.
+ *  
+ *  c-gomoku-cli is free software: you can redistribute it and/or modify it under the terms of the GNU
+ *  General Public License as published by the Free Software Foundation, either version 3 of the
+ *  License, or (at your option) any later version.
+ *  
+ *  c-gomoku-cli is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+ *  even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ *  General Public License for more details.
+ *  
+ *  You should have received a copy of the GNU General Public License along with this program. If
+ *  not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include <limits.h>
 #include <cstring>
 #include "game.h"
@@ -160,7 +162,7 @@ static int game_apply_rules(const Game *g, std::vector<move_t> legal_moves, std:
         allow_long_connection = false;
     }
 
-    if (pos->check_five_in_line_side(pos->get_turn(), allow_long_connection)) {
+    if (pos->check_five_in_line_lastmove(allow_long_connection)) {
         return STATE_FIVE_CONNECT;
     } else if (legal_moves.size() == 0) {
         return STATE_DRAW_INSUFFICIENT_SPACE;
@@ -197,8 +199,8 @@ void Game::game_init(int round, int game)
     round = round;
     game = game;
 
-    names[WHITE] = str_init();
     names[BLACK] = str_init();
+    names[WHITE] = str_init();
 
     pos = vec_init(Position);
     info = vec_init(Info);
@@ -226,7 +228,7 @@ void Game::game_destroy()
     vec_destroy(info);
     vec_destroy(pos);
 
-    str_destroy_n(&names[WHITE], &names[BLACK]);
+    str_destroy_n(&names[BLACK], &names[WHITE]);
 }
 
 void Game::send_board_set_go() {
@@ -240,7 +242,7 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
 // - sets state value: see enum STATE_* codes
 // - returns RESULT_LOSS/DRAW/WIN from engines[0] pov
 {
-    for (int color = WHITE; color <= BLACK; color++) {
+    for (int color = BLACK; color <= WHITE; color++) {
         str_cpy(&names[color], engines[color ^ pos[0].get_turn() ^ reverse].name);
     }
 
@@ -250,7 +252,10 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         gomocup_game_info_command(this, eo, i, o, &infoCmd);
         engines[i].engine_writeln(w, infoCmd.buf);
         // tell engine to start a new game
-        engines[i].engine_writeln(w, "START 15");
+        scope(str_destroy) str_t startCmd = str_init();
+        str_cpy_c(&startCmd, "");
+        str_cat_fmt(&startCmd, "START %i", o->boardSize);
+        engines[i].engine_writeln(w, startCmd.buf);
         engines[i].engine_wait_for_ok(w);
     }
 
@@ -265,7 +270,7 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
 
     // the starting position has been added at game_load_fen()
 
-    for (ply = 0; ; ei = 1 - ei, ply++) {
+    for (ply = 0; ; ei = (1 - ei), ply++) {
         std::vector<move_t> legalMoves;
         std::vector<move_t> forbiddenMoves;
 
@@ -318,7 +323,6 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
             if (false) { // use BOARD to trigger think
 
             } else { // use TURN to trigger think
-                
                 std::string last_move_str = pos[ply].move_to_gomostr(played);
                 printf("Get move str [%s]\n", last_move_str.c_str());
                 std::string turn_cmd = std::string("TURN ") + last_move_str;
@@ -379,21 +383,7 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         } else {
             resignCount[ei] = 0;
         }
-/*
-        // Write sample: position (compactly encoded) + score
-        if (prngf(&w->seed) <= o->sampleFrequency) {
-            Sample sample = {
-                .pos = o->sampleResolvePv ? resolved : pos[ply],
-                .score = info.score,
-                .result = NB_RESULT // unknown yet (use invalid state for now)
-            };
 
-            // Record sample, except if resolvePv=true and the position is in check (becuase PV
-            // resolution couldn't avoid it), in which case the sample is discarded.
-            if (!o->sampleResolvePv || !sample.pos.checkers)
-                vec_push(samples, sample);
-        }
-*/
         vec_push(pos, (Position){0}, Position);
 
         legalMoves.clear();
@@ -401,16 +391,11 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
     }
 
     assert(state != STATE_NONE);
-    //vec_destroy(legalMoves);
 
     // Signed result from black's pov: -1 (loss), 0 (draw), +1 (win)
     const int wpov = state < STATE_SEPARATOR
         ? (pos[ply].get_turn() == BLACK ? RESULT_LOSS : RESULT_WIN)  // lost from turn's pov
         : RESULT_DRAW;
-
-    //for (size_t i = 0; i < vec_size(samples); i++) {
-    //    samples[i].result = samples[i].pos.get_turn() == BLACK ? wpov : 2 - wpov;
-    //}
 
     return state < STATE_SEPARATOR
         ? (ei == 0 ? RESULT_LOSS : RESULT_WIN)  // engine on the move has lost
@@ -424,28 +409,32 @@ void Game::game_decode_state(str_t *result, str_t *reason)
 
     if (state == STATE_NONE) {
         str_cpy_c(result, "*");
-        str_cpy_c(reason, "unterminated");
+        str_cpy_c(reason, "Unterminated");
     } else if (state == STATE_FIVE_CONNECT) {
         str_cpy_c(result, pos[ply].get_turn() == BLACK ? "0-1" : "1-0");
-        str_cpy_c(reason, "five connection");
+        str_cpy_c(reason, pos[ply].get_turn() == BLACK ? "White win by five connection" : 
+                                                         "Black win by five connection");
     } else if (state == STATE_DRAW_INSUFFICIENT_SPACE)
-        str_cpy_c(reason, "draw by full board");
+        str_cpy_c(reason, "Draw by fullfilled board");
     else if (state == STATE_ILLEGAL_MOVE) {
         str_cpy_c(result, pos[ply].get_turn() == BLACK ? "0-1" : "1-0");
-        str_cpy_c(reason, "rules infraction");
+        str_cpy_c(reason, pos[ply].get_turn() == BLACK ? "White win by opponent illegal move" :
+                                                         "Black win by opponent illegal move");
     } else if (state == STATE_FORBIDDEN_MOVE) {
         //str_cpy_c(result, pos[ply].turn == BLACK ? "0-1" : "1-0");
         assert(pos[ply].get_turn() == BLACK);
         str_cpy_c(result, "0-1");
         str_cpy_c(reason, "black play on forbidden position");
     } else if (state == STATE_DRAW_ADJUDICATION)
-        str_cpy_c(reason, "adjudication");
+        str_cpy_c(reason, "Draw by adjudication");
     else if (state == STATE_RESIGN) {
         str_cpy_c(result, pos[ply].get_turn() == BLACK ? "0-1" : "1-0");
-        str_cpy_c(reason, "adjudication");
+        str_cpy_c(reason, pos[ply].get_turn() == BLACK ? "White win by adjudication" :
+                                                         "Black win by adjudication");
     } else if (state == STATE_TIME_LOSS) {
         str_cpy_c(result, pos[ply].get_turn() == BLACK ? "0-1" : "1-0");
-        str_cpy_c(reason, "time forfeit");
+        str_cpy_c(reason, pos[ply].get_turn() == BLACK ? "White win by time forfeit" : 
+                                                         "Black win by time forfeit");
     } else
         assert(false);
 }

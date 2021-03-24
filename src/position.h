@@ -1,26 +1,29 @@
-/*
- * c-chess-cli, a command line interface for UCI chess engines. Copyright 2020 lucasart.
- *
- * c-chess-cli is free software: you can redistribute it and/or modify it under the terms of the GNU
- * General Public License as published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * c-chess-cli is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with this program. If
- * not, see <http://www.gnu.org/licenses/>.
-*/
+/* 
+ *  c-gomoku-cli, a command line interface for Gomocup engines. Copyright 2021 Chao Ma.
+ *  c-gomoku-cli is derived from c-chess-cli, originally authored by lucasart 2020.
+ *  
+ *  c-gomoku-cli is free software: you can redistribute it and/or modify it under the terms of the GNU
+ *  General Public License as published by the Free Software Foundation, either version 3 of the
+ *  License, or (at your option) any later version.
+ *  
+ *  c-gomoku-cli is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+ *  even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ *  General Public License for more details.
+ *  
+ *  You should have received a copy of the GNU General Public License along with this program. If
+ *  not, see <http://www.gnu.org/licenses/>.
+ */
+
 #pragma once
 #include <vector>
 #include <string>
+#include <cassert>
 #include "str.h"
 
 typedef uint16_t move_t;
 typedef uint16_t Pos;
 
-enum Color {WHITE, BLACK, EMPTY, WALL};
+enum Color {BLACK, WHITE, EMPTY, WALL};
 
 #define BOARD_BOUNDARY 4
 #define MAX_BOARD_SIZE_BIT 5
@@ -63,6 +66,7 @@ public:
     void compute_forbidden_moves(std::vector<move_t> &forbidden_moves) const;
 
     bool check_five_in_line_side(Color side, bool allow_long_connection = true) const;
+    bool check_five_in_line_lastmove(bool allow_long_connection) const;
 
     // static methods
     static void pos_move_with_copy(Position *after, const Position *before, move_t m);
@@ -84,6 +88,12 @@ private:
 
 };
 
+inline Color oppositeColor(Color color)
+{
+    assert(color == WHITE || color == BLACK);
+    int c = color;
+    return (Color)(c ^ 0x1);  // branchless for: color == WHITE ? BLACK : WHITE
+}
 
 extern uint64_t zobristPc[4][Position::MaxBoardSizeSqr];
 extern uint64_t zobristTurn[4];

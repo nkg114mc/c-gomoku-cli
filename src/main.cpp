@@ -1,17 +1,19 @@
-/*
- * c-chess-cli, a command line interface for UCI chess engines. Copyright 2020 lucasart.
- *
- * c-chess-cli is free software: you can redistribute it and/or modify it under the terms of the GNU
- * General Public License as published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * c-chess-cli is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with this program. If
- * not, see <http://www.gnu.org/licenses/>.
-*/
+/* 
+ *  c-gomoku-cli, a command line interface for Gomocup engines. Copyright 2021 Chao Ma.
+ *  c-gomoku-cli is derived from c-chess-cli, originally authored by lucasart 2020.
+ *  
+ *  c-gomoku-cli is free software: you can redistribute it and/or modify it under the terms of the GNU
+ *  General Public License as published by the Free Software Foundation, either version 3 of the
+ *  License, or (at your option) any later version.
+ *  
+ *  c-gomoku-cli is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+ *  even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ *  General Public License for more details.
+ *  
+ *  You should have received a copy of the GNU General Public License along with this program. If
+ *  not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include <pthread.h>
 #include <stdlib.h>
 #include "engine.h"
@@ -85,12 +87,6 @@ static void main_init(int argc, const char **argv)
     }
 }
 
-int opposite(int color)
-{
-    assert(color < NB_COLOR);
-    return color ^ 0x1;  // branchless for: color == WHITE ? BLACK : WHITE
-}
-
 static void *thread_start(void *arg)
 {
     Worker *w = (Worker*)arg;
@@ -120,16 +116,16 @@ static void *thread_start(void *arg)
         // Play 1 game
         Game game;
         game.game_init(job.round, job.game);
-        int color = WHITE;
+        int color = BLACK; // black play first in gomoku/renju
 
         if (!game.game_load_fen(fen.buf, &color, &options)) {
             DIE("[%d] illegal FEN '%s'\n", w->id, fen.buf);
         }
 
-        const int whiteIdx = color ^ job.reverse;
+        const int blackIdx = color ^ job.reverse;
 
         printf("[%d] Started game %zu of %zu (%s vs %s)\n", w->id, idx + 1, count,
-            engines[whiteIdx].name.buf, engines[opposite(whiteIdx)].name.buf);
+            engines[blackIdx].name.buf, engines[oppositeColor((Color)blackIdx)].name.buf);
 
         const EngineOptions *eoPair[2] = {&eo[ei[0]], &eo[ei[1]]};
         const int wld = game.game_play(w, &options, engines, eoPair, job.reverse);
@@ -162,7 +158,7 @@ static void *thread_start(void *arg)
         game.game_decode_state(&result, &reason);
 
         printf("[%d] Finished game %zu (%s vs %s): %s {%s}\n", w->id, idx + 1,
-            engines[whiteIdx].name.buf, engines[opposite(whiteIdx)].name.buf, result.buf, reason.buf);
+            engines[blackIdx].name.buf, engines[oppositeColor((Color)blackIdx)].name.buf, result.buf, reason.buf);
 
         // Pair update
         int wldCount[3] = {0};

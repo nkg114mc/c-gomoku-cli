@@ -1,17 +1,19 @@
-/*
- * c-chess-cli, a command line interface for UCI chess engines. Copyright 2020 lucasart.
- *
- * c-chess-cli is free software: you can redistribute it and/or modify it under the terms of the GNU
- * General Public License as published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * c-chess-cli is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with this program. If
- * not, see <http://www.gnu.org/licenses/>.
-*/
+/* 
+ *  c-gomoku-cli, a command line interface for Gomocup engines. Copyright 2021 Chao Ma.
+ *  c-gomoku-cli is derived from c-chess-cli, originally authored by lucasart 2020.
+ *  
+ *  c-gomoku-cli is free software: you can redistribute it and/or modify it under the terms of the GNU
+ *  General Public License as published by the Free Software Foundation, either version 3 of the
+ *  License, or (at your option) any later version.
+ *  
+ *  c-gomoku-cli is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+ *  even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ *  General Public License for more details.
+ *  
+ *  You should have received a copy of the GNU General Public License along with this program. If
+ *  not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -47,7 +49,7 @@ inline move_t buildMoveReal(int x, int y, Color side) {
 }
 
 Color OPPSITE_COLOR[4] = {
-	BLACK, WHITE, EMPTY, WALL
+	WHITE, BLACK, EMPTY, WALL
 };
 
 Color opponent_color(Color c) {
@@ -201,11 +203,11 @@ void check_five_helper(bool allow_long_connc, int &conCnt, int & fiveCnt) {
 bool Position::check_five_in_line_side(Color side, bool allow_long_connection) const {
     assert(side == WHITE || side == BLACK);
 
-    if (moveCount >= 10) {
-        return true;
-    }
+    //if (moveCount >= 10) {
+    //    return true;
+    //}
 
-    int i, j;
+    int i, j, k;
     int fiveCount = 0;
 
     for (i = 0; i < boardSize; i++) {
@@ -236,10 +238,16 @@ bool Position::check_five_in_line_side(Color side, bool allow_long_connection) c
         check_five_helper(allow_long_connection, continueCount, fiveCount);
     }
 
-    
-    for (i = 0; i < boardSize; i++) {
+    for (k = -(boardSize - 1); k < boardSize; k++) {
+        if (k <= 0) {
+            i = 0;
+            j = -k;
+        } else {
+            i = k;
+            j = 0;
+        }
         int continueCount = 0;
-        for (j = 0; j < boardSize; j++) {
+        while (isInBoard(POS(i, j))) {
             Pos p = POS(i, j);
             if (board[p] == side) {
                 continueCount++;
@@ -247,13 +255,45 @@ bool Position::check_five_in_line_side(Color side, bool allow_long_connection) c
                 check_five_helper(allow_long_connection, continueCount, fiveCount);
                 continueCount = 0;
             }
+            i += 1;
+            j += 1;
         }
         check_five_helper(allow_long_connection, continueCount, fiveCount);
     }
 
+    for (k = 0; k < (boardSize * 2 - 1); k++) {
+        i = min(k, boardSize - 1);
+        j = k - i;
+        int continueCount = 0;
+        while (isInBoard(POS(i, j))) {
+            Pos p = POS(i, j);
+            if (board[p] == side) {
+                continueCount++;
+            } else {
+                check_five_helper(allow_long_connection, continueCount, fiveCount);
+                continueCount = 0;
+            }
+            i -= 1;
+            j += 1;
+        }
+        check_five_helper(allow_long_connection, continueCount, fiveCount);
+    }
 
+    std::cout << "fiveCount of " << side << " = " << fiveCount << std::endl;
 
+    assert(fiveCount <= 1);
+    if (fiveCount > 0) {
+        return true;
+    }
     return false;
+}
+
+bool Position::check_five_in_line_lastmove(bool allow_long_connection) const {
+    if (moveCount < 5) {
+        return false;
+    }
+    Color lastPiece = board[historyMoves[moveCount - 1]];
+    return check_five_in_line_side(lastPiece, allow_long_connection);
 }
     
 move_t Position::gomostr_to_move(char *move_str) const {
@@ -274,7 +314,7 @@ move_t Position::gomostr_to_move(char *move_str) const {
     std::string xstr = mvstr.substr(0, firstLen);
     int secondLen = mvstr.length() - commaIdx - 1;
     std::string ystr = mvstr.substr(commaIdx + 1, secondLen);
-    std::cout << xstr << " " << ystr << std::endl;
+    //std::cout << xstr << " " << ystr << std::endl;
 
     int x = std::stoi(xstr);
     int y = std::stoi(ystr);
