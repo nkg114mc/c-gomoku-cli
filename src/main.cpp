@@ -58,6 +58,8 @@ static void main_init(int argc, const char **argv)
 {
     atexit(main_destroy);
 
+    initZobrish();
+
     eo = (EngineOptions*)vec_init(EngineOptions);
     options = options_init();
     options_parse(argc, argv, &options, &eo);

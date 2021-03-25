@@ -59,7 +59,6 @@ public:
     void game_init(int round, int game);
     void game_destroy();
 
-    void send_board_set_go();
     bool game_load_fen(const char *fen, int *color, const Options *o);
 
     int game_play(Worker *w, const Options *o, Engine engines[2],
@@ -67,8 +66,18 @@ public:
 
     void game_decode_state(str_t *result, str_t *reason);
     void game_export_pgn(int verbosity, str_t *out);
-    //void game_export_samples(str_t *out);
     void game_export_sgf(int verbosity, str_t *out);
+
+private:
+
+    void compute_time_left(const EngineOptions *eo, int64_t *timeLeft);
+    void send_board_command(Position *pos, Worker *w, Engine *engine);
+    void gomocup_turn_info_command(const EngineOptions *eo, 
+                                   const int64_t timeLeft, 
+                                   Worker *w, 
+                                   Engine *engine);
+    void gomocup_game_info_command(const EngineOptions *eo[2], int ei, 
+                                   const Options *option, 
+                                   Worker *w, 
+                                   Engine *engine);
 };
-
-

@@ -152,20 +152,7 @@ void Engine::engine_init(Worker *w, const char *cmd, const char *name, const str
 
 /*
     // Start the uci..uciok dialogue
-    w->deadline_set(this->name.buf, system_msec() + 4000);
-    engine_writeln(w, "ABOUT");
-    scope(str_destroy) str_t line = str_init();
-
-    do {
-        engine_readln(w, &line);
-        const char *tail = NULL;
-
-        // If no name was provided, parse it from "id name %s"
-        if (!*name && (tail = str_prefix(line.buf, "id name ")))
-            str_cpy_c(&(this->name), tail + strspn(tail, " "));
-
-    } while (strcmp(line.buf, "uciok"));
-    w->deadline_clear();
+    // No such thing in gomocup
 */
     // parse engine ABOUT infomation
     engine_about(w);
@@ -228,6 +215,114 @@ void Engine::engine_wait_for_ok(Worker *w)
     } while (strcmp(line.buf, "OK"));
     w->deadline_clear();
 }
+
+bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, str_t *best, str_t *pv,
+    Info *info)
+{
+    int result = false;
+    scope(str_destroy) str_t line = str_init(), token = str_init();
+    str_clear(pv);
+
+    const int64_t start = system_msec(), timeLimit = start + *timeLeft;
+    w->deadline_set(name.buf, timeLimit + 1000);
+
+    while (*timeLeft >= 0 && !result) {
+        engine_readln(w, &line);
+
+        const int64_t now = system_msec();
+        info->time = now - start;
+        *timeLeft = timeLimit - now;
+
+        const char *tail = NULL;
+
+        if ((tail = str_prefix(line.buf, "MESSAGE"))) {
+            engine_process_message_ifneeded(line.buf);
+            /*
+            while ((tail = str_tok(tail, &token, " "))) {
+                if (!strcmp(token.buf, "depth")) {
+                    if ((tail = str_tok(tail, &token, " ")))
+                        info->depth = atoi(token.buf);
+                } else if (!strcmp(token.buf, "score")) {
+                    if ((tail = str_tok(tail, &token, " "))) {
+                        if (!strcmp(token.buf, "cp") && (tail = str_tok(tail, &token, " ")))
+                            info->score = atoi(token.buf);
+                        else if (!strcmp(token.buf, "mate") && (tail = str_tok(tail, &token, " "))) {
+                            const int movesToMate = atoi(token.buf);
+                            info->score = movesToMate < 0 ? INT_MIN - movesToMate : INT_MAX - movesToMate;
+                        } else
+                            DIE("illegal syntax after 'score' in '%s'\n", line.buf);
+                    }
+                } else if (!strcmp(token.buf, "pv")) {
+                    str_cpy_c(pv, tail + strspn(tail, " "));
+                }
+            }*/
+        } else if (Position::is_valid_move_gomostr(line.buf)) {
+            str_cpy(best, line);
+            result = true;
+        }
+    }
+
+    // Time out. Send "stop" and give the opportunity to the engine to respond with bestmove (still
+    // under deadline protection).
+    if (!result) {
+        engine_writeln(w, "YXSTOP");
+
+        do {
+            engine_readln(w, &line);
+            engine_process_message_ifneeded(line.buf);
+        } while (!Position::is_valid_move_gomostr(line.buf));
+    }
+
+    w->deadline_clear();
+    return result;
+}
+
+// process 
+void Engine::engine_about(Worker *w) {
+    w->deadline_set(name.buf, system_msec() + 2000);
+    engine_writeln(w, "ABOUT");
+    scope(str_destroy) str_t line = str_init();
+
+    engine_readln(w, &line);
+
+    // parse about infos
+    printf("Get Engine About:[%s]\n", line.buf);
+
+    w->deadline_clear();
+}
+
+// process MESSAGE, UNKNOWN, ERROR, DEBUG messages
+void Engine::engine_process_message_ifneeded(const char *line)
+{
+    // Isolate the first token being the command to run.
+    //scope(str_destroy) str_t token = str_init();
+    const char *tail = NULL;
+
+    tail = str_prefix(line, "MESSAGE");
+    if (tail != NULL) { // a MESSAGE
+        printf("Engine[%s] output message:%s\n", this->name.buf, tail);
+        return;
+    }
+
+    tail = str_prefix(line, "UNKNOWN");
+    if (tail != NULL) { // a UNKNOWN
+        printf("Engine[%s] output unknown:%s\n", this->name.buf, tail);
+        return;
+    }
+
+    tail = str_prefix(line, "DEBUG");
+    if (tail != NULL) { // a DEBUG
+        printf("Engine[%s] output debug:%s\n", this->name.buf, tail);
+        return;
+    }
+
+    tail = str_prefix(line, "ERROR");
+    if (tail != NULL) { // an ERROR
+        printf("Engine[%s] output error:%s\n", this->name.buf, tail);
+        return;
+    }
+}
+
 /*
 void Engine::engine_sync(Worker *w)
 {
@@ -301,112 +396,3 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, str_t *best, str_t *p
     return result;
 }
 */
-
-bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, str_t *best, str_t *pv,
-    Info *info)
-{
-    int result = false;
-    scope(str_destroy) str_t line = str_init(), token = str_init();
-    str_clear(pv);
-
-    const int64_t start = system_msec(), timeLimit = start + *timeLeft;
-    w->deadline_set(name.buf, timeLimit + 1000);
-
-    while (*timeLeft >= 0 && !result) {
-        engine_readln(w, &line);
-
-        const int64_t now = system_msec();
-        info->time = now - start;
-        *timeLeft = timeLimit - now;
-
-        const char *tail = NULL;
-
-        if ((tail = str_prefix(line.buf, "MESSAGE"))) {
-            engine_process_message_ifneeded(line.buf);
-            /*
-            while ((tail = str_tok(tail, &token, " "))) {
-                if (!strcmp(token.buf, "depth")) {
-                    if ((tail = str_tok(tail, &token, " ")))
-                        info->depth = atoi(token.buf);
-                } else if (!strcmp(token.buf, "score")) {
-                    if ((tail = str_tok(tail, &token, " "))) {
-                        if (!strcmp(token.buf, "cp") && (tail = str_tok(tail, &token, " ")))
-                            info->score = atoi(token.buf);
-                        else if (!strcmp(token.buf, "mate") && (tail = str_tok(tail, &token, " "))) {
-                            const int movesToMate = atoi(token.buf);
-                            info->score = movesToMate < 0 ? INT_MIN - movesToMate : INT_MAX - movesToMate;
-                        } else
-                            DIE("illegal syntax after 'score' in '%s'\n", line.buf);
-                    }
-                } else if (!strcmp(token.buf, "pv")) {
-                    str_cpy_c(pv, tail + strspn(tail, " "));
-                }
-            }*/
-        } else if (Position::is_valid_move_gomostr(line.buf)) {
-            //str_tok(tail, &token, " ");
-            str_cpy(best, line);
-            result = true;
-        }
-    }
-
-    // Time out. Send "stop" and give the opportunity to the engine to respond with bestmove (still
-    // under deadline protection).
-    if (!result) {
-        engine_writeln(w, "YXSTOP");
-
-        do {
-            engine_readln(w, &line);
-            engine_process_message_ifneeded(line.buf);
-        //} while (!str_prefix(line.buf, "bestmove "));
-        } while (!Position::is_valid_move_gomostr(line.buf));
-    }
-
-    w->deadline_clear();
-    return result;
-}
-
-// process 
-void Engine::engine_about(Worker *w) {
-    w->deadline_set(name.buf, system_msec() + 2000);
-    engine_writeln(w, "ABOUT");
-    scope(str_destroy) str_t line = str_init();
-
-    engine_readln(w, &line);
-
-    // parse about infos
-    printf("Get Engine About:[%s]\n", line.buf);
-
-    w->deadline_clear();
-}
-
-// process MESSAGE, UNKNOWN, ERROR, DEBUG messages
-void Engine::engine_process_message_ifneeded(const char *line)
-{
-    // Isolate the first token being the command to run.
-    //scope(str_destroy) str_t token = str_init();
-    const char *tail = NULL;
-
-    tail = str_prefix(line, "MESSAGE");
-    if (tail != NULL) { // a MESSAGE
-        printf("Engine[%s] output message:%s\n", this->name.buf, tail);
-        return;
-    }
-
-    tail = str_prefix(line, "UNKNOWN");
-    if (tail != NULL) { // a UNKNOWN
-        printf("Engine[%s] output unknown:%s\n", this->name.buf, tail);
-        return;
-    }
-
-    tail = str_prefix(line, "DEBUG");
-    if (tail != NULL) { // a DEBUG
-        printf("Engine[%s] output debug:%s\n", this->name.buf, tail);
-        return;
-    }
-
-    tail = str_prefix(line, "ERROR");
-    if (tail != NULL) { // an ERROR
-        printf("Engine[%s] output error:%s\n", this->name.buf, tail);
-        return;
-    }
-}

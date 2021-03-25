@@ -23,132 +23,6 @@
 #include "position.h"
 
 
-static void gomocup_turn_info_command(Game *g, 
-                                      const EngineOptions *eo[2], 
-                                      int ei, 
-                                      const int64_t timeLeft[2], 
-                                      str_t *cmd)
-{
-/*
-    str_cpy_c(cmd, "");
-
-    if (eo[ei]->nodes)
-        str_cat_fmt(cmd, " nodes %I", eo[ei]->nodes);
-
-    if (eo[ei]->depth)
-        str_cat_fmt(cmd, " depth %i", eo[ei]->depth);
-
-    if (eo[ei]->movetime)
-        str_cat_fmt(cmd, " movetime %I", eo[ei]->movetime);
-
-    if (eo[ei]->time || eo[ei]->increment) {
-        const int color = g->pos[g->ply].turn;
-
-        str_cat_fmt(cmd, " wtime %I winc %I btime %I binc %I",
-            timeLeft[ei ^ color], eo[ei ^ color]->increment,
-            timeLeft[ei ^ color ^ BLACK], eo[ei ^ color ^ BLACK]->increment);
-    }
-
-    if (eo[ei]->movestogo)
-        str_cat_fmt(cmd, " movestogo %i",
-            eo[ei]->movestogo - ((g->ply / 2) % eo[ei]->movestogo));
-*/
-    
-    str_cpy_c(cmd, "");
-
-    str_cat_fmt(cmd, "INFO time_left %I", 1000ULL);
-
-/*
-timeout_turn  - time limit for each move (milliseconds, 0=play as fast as possible)
-timeout_match - time limit of a whole match (milliseconds, 0=no limit)
-max_memory    - memory limit (bytes, 0=no limit)
-     - remaining time limit of a whole match (milliseconds)
-
-    timeout_turn  - time limit for each move (milliseconds, 0=play as fast as possible)
-    timeout_match - time limit of a whole match (milliseconds, 0=no limit)
-    max_memory    - memory limit (bytes, 0=no limit)
-*/
-    
-}
-
-static void gomocup_game_info_command(Game *g, const EngineOptions *eo[2], int ei, const Options *option, str_t *cmd)
-{
-/*
-    str_cpy_c(cmd, "");
-
-    if (eo[ei]->nodes)
-        str_cat_fmt(cmd, " nodes %I", eo[ei]->nodes);
-
-    if (eo[ei]->depth)
-        str_cat_fmt(cmd, " depth %i", eo[ei]->depth);
-
-    if (eo[ei]->movetime)
-        str_cat_fmt(cmd, " movetime %I", eo[ei]->movetime);
-
-    if (eo[ei]->time || eo[ei]->increment) {
-        const int color = g->pos[g->ply].turn;
-
-        str_cat_fmt(cmd, " wtime %I winc %I btime %I binc %I",
-            timeLeft[ei ^ color], eo[ei ^ color]->increment,
-            timeLeft[ei ^ color ^ BLACK], eo[ei ^ color ^ BLACK]->increment);
-    }
-
-    if (eo[ei]->movestogo)
-        str_cat_fmt(cmd, " movestogo %i",
-            eo[ei]->movestogo - ((g->ply / 2) % eo[ei]->movestogo));
-*/
-    
-    str_cpy_c(cmd, "");
-
-    // game info
-
-    if (option->gameRule) {
-        str_cat_fmt(cmd, "INFO rule %i", option->gameRule);
-    }
-
-    // engine specific info
-
-    if (eo[ei]->timeoutTurn) {
-        str_cat_fmt(cmd, "INFO timeout_turn %I", eo[ei]->timeoutTurn);
-    }
-
-    if (eo[ei]->timeoutMatch) {
-        str_cat_fmt(cmd, "INFO timeout_match %I", eo[ei]->timeoutMatch);
-    }
-
-    if (eo[ei]->maxMemory) {
-        str_cat_fmt(cmd, "INFO max_memory %I", eo[ei]->maxMemory);
-    }
-}
-
-static void gomocup_board_command(Game *g, const EngineOptions *eo[2], int ei, const int64_t timeLeft[2], str_t *cmd)
-{
-/*
-    str_cpy_c(cmd, "go");
-
-    if (eo[ei]->nodes)
-        str_cat_fmt(cmd, " nodes %I", eo[ei]->nodes);
-
-    if (eo[ei]->depth)
-        str_cat_fmt(cmd, " depth %i", eo[ei]->depth);
-
-    if (eo[ei]->movetime)
-        str_cat_fmt(cmd, " movetime %I", eo[ei]->movetime);
-
-    if (eo[ei]->time || eo[ei]->increment) {
-        const int color = g->pos[g->ply].turn;
-
-        str_cat_fmt(cmd, " wtime %I winc %I btime %I binc %I",
-            timeLeft[ei ^ color], eo[ei ^ color]->increment,
-            timeLeft[ei ^ color ^ BLACK], eo[ei ^ color ^ BLACK]->increment);
-    }
-
-    if (eo[ei]->movestogo)
-        str_cat_fmt(cmd, " movestogo %i",
-            eo[ei]->movestogo - ((g->ply / 2) % eo[ei]->movestogo));
-*/
-}
-
 // Applies rules to generate legal moves, and determine the state of the game
 static int game_apply_rules(const Game *g, std::vector<move_t> legal_moves, std::vector<move_t> forbidden_moves)
 {
@@ -231,8 +105,109 @@ void Game::game_destroy()
     str_destroy_n(&names[BLACK], &names[WHITE]);
 }
 
-void Game::send_board_set_go() {
+void Game::gomocup_turn_info_command(const EngineOptions *eo, 
+                                     const int64_t timeLeft, 
+                                     Worker *w, 
+                                     Engine *engine)
+{
+/*
+    str_cpy_c(cmd, "");
 
+    if (eo[ei]->nodes)
+        str_cat_fmt(cmd, " nodes %I", eo[ei]->nodes);
+
+    if (eo[ei]->depth)
+        str_cat_fmt(cmd, " depth %i", eo[ei]->depth);
+
+    if (eo[ei]->movetime)
+        str_cat_fmt(cmd, " movetime %I", eo[ei]->movetime);
+
+    if (eo[ei]->time || eo[ei]->increment) {
+        const int color = g->pos[g->ply].turn;
+
+        str_cat_fmt(cmd, " wtime %I winc %I btime %I binc %I",
+            timeLeft[ei ^ color], eo[ei ^ color]->increment,
+            timeLeft[ei ^ color ^ BLACK], eo[ei ^ color ^ BLACK]->increment);
+    }
+
+    if (eo[ei]->movestogo)
+        str_cat_fmt(cmd, " movestogo %i",
+            eo[ei]->movestogo - ((g->ply / 2) % eo[ei]->movestogo));
+*/
+    scope(str_destroy) str_t cmd = str_init();
+    str_cpy_c(&cmd, "");
+    str_cat_fmt(&cmd, "INFO time_left %I", 1000ULL);
+    //str_cat_fmt(cmd, "INFO time_left %I", myTimeLeft)
+    engine->engine_writeln(w, cmd.buf);
+
+}
+
+void Game::gomocup_game_info_command(const EngineOptions *eo[2], int ei, 
+                                     const Options *option, 
+                                     Worker *w, 
+                                     Engine *engine)
+{/*
+    str_cpy_c(cmd, "");
+
+    // game info
+    str_cat_fmt(cmd, "INFO rule %i", option->gameRule);
+
+    // engine specific info
+    if (eo[ei]->timeoutTurn) {
+        str_cat_fmt(cmd, "INFO timeout_turn %I", eo[ei]->timeoutTurn);
+    }
+
+    if (eo[ei]->timeoutMatch) {
+        str_cat_fmt(cmd, "INFO timeout_match %I", eo[ei]->timeoutMatch);
+    }
+
+    if (eo[ei]->maxMemory) {
+        str_cat_fmt(cmd, "INFO max_memory %I", eo[ei]->maxMemory);
+    }
+    */
+}
+
+
+void Game::send_board_command(Position *pos, Worker *w, Engine *engine)
+{
+    engine->engine_writeln(w, "BOARD");
+
+    int moveCnt = pos->get_move_count();
+    Pos *histMoves = pos->get_hist_moves();
+
+    int gomocupColorIdx = 1;
+    for (int i = 0; i < moveCnt; i++) {
+        Pos p = histMoves[i];
+        int x = Position::getPosX(p);
+        int y = Position::getPosY(p);
+        scope(str_destroy) str_t cmd = str_init();
+        str_cpy_c(&cmd, "");
+        str_cat_fmt(&cmd, "%i,%i,%i", x, y, gomocupColorIdx);
+        engine->engine_writeln(w, cmd.buf);
+
+        gomocupColorIdx = (gomocupColorIdx % 2 + 1);
+    }
+
+    engine->engine_writeln(w, "DONE");
+}
+
+void Game::compute_time_left(const EngineOptions *eo, int64_t *timeLeft) {
+
+    if (eo->movetime) {
+        // movetime is special: discard movestogo, time, increment
+        (*timeLeft) = eo->movetime;
+    } else if (eo->time || eo->increment) {
+        // Always apply increment (can be zero)
+        (*timeLeft) += eo->increment;
+
+        // movestogo specific clock reset event
+        if (eo->movestogo && ply > 1 && ((ply / 2) % eo->movestogo) == 0) {
+            (*timeLeft) += eo->time;
+        }
+    } else {
+        // Only depth and/or nodes limit
+        (*timeLeft) = INT64_MAX / 2;  // HACK: system_msec() + timeLeft must not overflow
+    }
 }
 
 int Game::game_play(Worker *w, const Options *o, Engine engines[2],
@@ -248,9 +223,8 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
 
     for (int i = 0; i < 2; i++) {
         // send game info
-        scope(str_destroy) str_t infoCmd = str_init();
-        gomocup_game_info_command(this, eo, i, o, &infoCmd);
-        engines[i].engine_writeln(w, infoCmd.buf);
+        gomocup_game_info_command(eo, i, o, w, &(engines[i]));
+
         // tell engine to start a new game
         scope(str_destroy) str_t startCmd = str_init();
         str_cpy_c(&startCmd, "");
@@ -292,36 +266,17 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         engines[i].engine_wait_for_ok(w);
 */
         // Prepare timeLeft[ei]
-        if (eo[ei]->movetime) {
-            // movetime is special: discard movestogo, time, increment
-            timeLeft[ei] = eo[ei]->movetime;
-        } else if (eo[ei]->time || eo[ei]->increment) {
-            // Always apply increment (can be zero)
-            timeLeft[ei] += eo[ei]->increment;
-
-            // movestogo specific clock reset event
-            if (eo[ei]->movestogo && ply > 1 && ((ply / 2) % eo[ei]->movestogo) == 0) {
-                timeLeft[ei] += eo[ei]->time;
-            }
-        } else {
-            // Only depth and/or nodes limit
-            timeLeft[ei] = INT64_MAX / 2;  // HACK: system_msec() + timeLeft must not overflow
-        }
+        compute_time_left(eo[ei], &(timeLeft[ei]));
 
         // output game/turn info
-        //uci_go_command(this, eo, ei, timeLeft, &cmd);
-        //engines[ei].engine_writeln(w, cmd.buf);
-        gomocup_turn_info_command(this, eo, ei, timeLeft, &cmd);
-        if (strlen(cmd.buf) > 0) {
-            engines[ei].engine_writeln(w, cmd.buf);
-        }
+        gomocup_turn_info_command(eo[ei], timeLeft[ei], w, &(engines[ei]));
         
         // trigger think!
         if (ply == 0) {
             engines[ei].engine_writeln(w, "BEGIN");
         } else {
             if (false) { // use BOARD to trigger think
-
+                send_board_command(&(pos[ply]), w, &(engines[ei]));
             } else { // use TURN to trigger think
                 std::string last_move_str = pos[ply].move_to_gomostr(played);
                 printf("Get move str [%s]\n", last_move_str.c_str());
@@ -353,7 +308,6 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
             break;
         }
 
-        //if (illegal_move(played, legalMoves)) {
         if (!pos[ply].is_legal_move(played)) {
             state = STATE_ILLEGAL_MOVE;
             break;

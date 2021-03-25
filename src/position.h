@@ -50,6 +50,8 @@ public:
 */
 
     inline Color get_turn() { return playerToMove; }
+    inline int get_move_count() { return moveCount; }
+    inline Pos* get_hist_moves() { return historyMoves; }
 
     void move(move_t m);
     void undo();
@@ -71,6 +73,8 @@ public:
     // static methods
     static void pos_move_with_copy(Position *after, const Position *before, move_t m);
     static bool is_valid_move_gomostr(char *move_str);
+    static int getPosX(Pos p);
+    static int getPosY(Pos p);
 
 private:
 	Color board[MaxBoardSizeSqr];
