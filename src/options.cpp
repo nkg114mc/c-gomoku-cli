@@ -128,8 +128,9 @@ static int options_parse_adjudication(int argc, const char **argv, int i, int *c
     if (i + 1 < argc) {
         *count = atoi(argv[i++]);
         *score = atoi(argv[i]);
-    } else
+    } else {
         DIE("Missing parameter(s) for '%s'\n", argv[i - 1]);
+    }
 
     return i;
 }
@@ -279,15 +280,25 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
     o->rounds = 1;
     o->log = true;
     //o->boardSize = 12;
+    o->gameRule = 0;
+
 
     EngineOptions engine1 = engine_options_init();
     str_cpy_c(&engine1.cmd, "./exmple-engine/pbrain-rapfi1");
+    //str_cpy_c(&engine1.cmd, "./exmple-engine/pbrain-wine");
     str_cpy_c(&engine1.name, "Rapfi");
+    //engine1.maxMemory = 100 * 1000 * 1000;
+    engine1.timeoutMatch = 180 * 1000;
+    engine1.timeoutTurn = 10 * 1000;
     vec_push(*eo, engine1, EngineOptions);
 
     EngineOptions engine2 = engine_options_init();
-    str_cpy_c(&engine2.cmd, "./exmple-engine/pbrain-wine");
+    //str_cpy_c(&engine2.cmd, "./exmple-engine/pbrain-wine");
+    str_cpy_c(&engine2.cmd, "./exmple-engine/pbrain-rapfi1");
     str_cpy_c(&engine2.name, "Wine");
+    engine2.maxMemory = 100 * 1000 * 1000;
+    engine2.timeoutMatch = 180 * 1000;
+    engine2.timeoutTurn = 10 * 1000;
     vec_push(*eo, engine2, EngineOptions);
 }
 

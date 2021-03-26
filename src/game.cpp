@@ -135,9 +135,10 @@ void Game::gomocup_turn_info_command(const EngineOptions *eo,
             eo[ei]->movestogo - ((g->ply / 2) % eo[ei]->movestogo));
 */
     scope(str_destroy) str_t cmd = str_init();
+
     str_cpy_c(&cmd, "");
-    str_cat_fmt(&cmd, "INFO time_left %I", 1000ULL);
-    //str_cat_fmt(cmd, "INFO time_left %I", myTimeLeft)
+    //str_cat_fmt(&cmd, "INFO time_left %I", 1000ULL);
+    str_cat_fmt(&cmd, "INFO time_left %I", timeLeft);
     engine->engine_writeln(w, cmd.buf);
 
 }
@@ -146,25 +147,32 @@ void Game::gomocup_game_info_command(const EngineOptions *eo[2], int ei,
                                      const Options *option, 
                                      Worker *w, 
                                      Engine *engine)
-{/*
-    str_cpy_c(cmd, "");
+{
+    scope(str_destroy) str_t cmd = str_init();
 
     // game info
-    str_cat_fmt(cmd, "INFO rule %i", option->gameRule);
+    str_cpy_c(&cmd, "");
+    str_cat_fmt(&cmd, "INFO rule %i", option->gameRule);
+    engine->engine_writeln(w, cmd.buf);
 
     // engine specific info
     if (eo[ei]->timeoutTurn) {
-        str_cat_fmt(cmd, "INFO timeout_turn %I", eo[ei]->timeoutTurn);
+        str_cpy_c(&cmd, "");
+        str_cat_fmt(&cmd, "INFO timeout_turn %I", eo[ei]->timeoutTurn);
+        engine->engine_writeln(w, cmd.buf);
     }
 
     if (eo[ei]->timeoutMatch) {
-        str_cat_fmt(cmd, "INFO timeout_match %I", eo[ei]->timeoutMatch);
+        str_cpy_c(&cmd, "");
+        str_cat_fmt(&cmd, "INFO timeout_match %I", eo[ei]->timeoutMatch);
+        engine->engine_writeln(w, cmd.buf);
     }
 
     if (eo[ei]->maxMemory) {
-        str_cat_fmt(cmd, "INFO max_memory %I", eo[ei]->maxMemory);
+        str_cpy_c(&cmd, "");
+        str_cat_fmt(&cmd, "INFO max_memory %I", eo[ei]->maxMemory);
+        engine->engine_writeln(w, cmd.buf);
     }
-    */
 }
 
 
@@ -192,7 +200,7 @@ void Game::send_board_command(Position *pos, Worker *w, Engine *engine)
 }
 
 void Game::compute_time_left(const EngineOptions *eo, int64_t *timeLeft) {
-
+/*
     if (eo->movetime) {
         // movetime is special: discard movestogo, time, increment
         (*timeLeft) = eo->movetime;
@@ -206,6 +214,12 @@ void Game::compute_time_left(const EngineOptions *eo, int64_t *timeLeft) {
         }
     } else {
         // Only depth and/or nodes limit
+        (*timeLeft) = INT64_MAX / 2;  // HACK: system_msec() + timeLeft must not overflow
+    }
+*/
+    if (eo->timeoutMatch > 0) {
+        // do nothing
+    } else {
         (*timeLeft) = INT64_MAX / 2;  // HACK: system_msec() + timeLeft must not overflow
     }
 }
@@ -222,15 +236,15 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
     }
 
     for (int i = 0; i < 2; i++) {
-        // send game info
-        gomocup_game_info_command(eo, i, o, w, &(engines[i]));
-
         // tell engine to start a new game
         scope(str_destroy) str_t startCmd = str_init();
         str_cpy_c(&startCmd, "");
         str_cat_fmt(&startCmd, "START %i", o->boardSize);
         engines[i].engine_writeln(w, startCmd.buf);
         engines[i].engine_wait_for_ok(w);
+
+        // send game info
+        gomocup_game_info_command(eo, i, o, w, &(engines[i]));
     }
 
     scope(str_destroy) str_t cmd = str_init(), best = str_init();
@@ -238,9 +252,12 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
     int drawPlyCount = 0;
     int resignCount[NB_COLOR] = {0};
     int ei = reverse;  // engines[ei] has the move
-    int64_t timeLeft[2] = {eo[0]->time, eo[1]->time};
+    int64_t timeLeft[2] = {0LL, 0LL};//{eo[0]->time, eo[1]->time};
     scope(str_destroy) str_t pv = str_init();
 
+    // init time control
+    timeLeft[0] = eo[0]->timeoutMatch;
+    timeLeft[1] = eo[1]->timeoutMatch;
 
     // the starting position has been added at game_load_fen()
 
@@ -288,7 +305,7 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         }
 
         Info info = {0};
-        const bool ok = engines[ei].engine_bestmove(w, &timeLeft[ei], &best, &pv, &info);
+        const bool ok = engines[ei].engine_bestmove(w, &timeLeft[ei], eo[ei]->timeoutTurn, &best, &pv, &info);
         vec_push(this->info, info, Info);
 
         // Parses the last PV sent. An invalid PV is not fatal, but logs some warnings. Keep track
@@ -360,6 +377,10 @@ void Game::game_decode_state(str_t *result, str_t *reason)
 {
     str_cpy_c(result, "1/2-1/2");
     str_clear(reason);
+
+    // Note: pos.get_turn() returns next side to move, so when pos is a win position
+    // and next side to move is <color>, then the side of win is opponent(<color>),
+    // which is last moved side
 
     if (state == STATE_NONE) {
         str_cpy_c(result, "*");

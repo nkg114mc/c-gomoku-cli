@@ -45,7 +45,7 @@ public:
 
     void engine_sync(Worker *w);
     void engine_wait_for_ok(Worker *w);
-    bool engine_bestmove(Worker *w, int64_t *timeLeft, str_t *best, str_t *pv, Info *info);
+    bool engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, str_t *best, str_t *pv, Info *info);
 
     void engine_about(Worker *w);
     // process MESSAGE, UNKNOWN, ERROR, DEBUG messages

@@ -216,22 +216,33 @@ void Engine::engine_wait_for_ok(Worker *w)
     w->deadline_clear();
 }
 
-bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, str_t *best, str_t *pv,
+bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, str_t *best, str_t *pv,
     Info *info)
 {
     int result = false;
     scope(str_destroy) str_t line = str_init(), token = str_init();
     str_clear(pv);
 
-    const int64_t start = system_msec(), timeLimit = start + *timeLeft;
-    w->deadline_set(name.buf, timeLimit + 1000);
+    const int64_t start = system_msec();
+    const int64_t matchTimeLimit = start + *timeLeft;
+    int64_t turnTimeLimit = matchTimeLimit;
+    int64_t turnTimeLeft = *timeLeft;
+    if (maxTurnTime > 0) {
+        // engine should not think longer than the turn_time_limit
+        turnTimeLimit = start + min(*timeLeft, maxTurnTime);
+        turnTimeLeft = min(*timeLeft, maxTurnTime);
+    }
+    
+    w->deadline_set(name.buf, turnTimeLimit + 1000);
 
-    while (*timeLeft >= 0 && !result) {
+    //while (*timeLeft >= 0 && !result) {
+    while ((turnTimeLeft + 1000) >= 0 && !result) {
         engine_readln(w, &line);
 
         const int64_t now = system_msec();
         info->time = now - start;
-        *timeLeft = timeLimit - now;
+        *timeLeft = matchTimeLimit - now;
+        turnTimeLeft = turnTimeLimit - now;
 
         const char *tail = NULL;
 

@@ -139,21 +139,12 @@ static void *thread_start(void *arg)
             pgnSeqWriter.seq_writer_push(idx, pgnText);
         }
 
-        // Write to Sample file
+        // Write to SGF file
         if (options.sgf.len) {
             scope(str_destroy) str_t sgfText = str_init();
             game.game_export_sgf(options.pgnVerbosity, &sgfText);
             //fputs(sgfText.buf, sgfFile);
         }
-/*
-        // Write to Sample file
-        if (options.sample.len) {
-            scope(str_destroy) str_t sampleText = str_init();
-            game.game_export_samples(&sampleText);
-            fputs(sampleText.buf, sampleFile);
-        }
-*/
-
 
         // Write to stdout a one line summary of the game
         scope(str_destroy) str_t result = str_init(), reason = str_init();
