@@ -31,7 +31,7 @@ static Options options;
 static EngineOptions *eo;
 static Openings openings;
 static SeqWriter pgnSeqWriter;
-FILE *sampleFile;
+//FILE *sampleFile;
 static JobQueue jq;
 
 static void main_destroy(void)
@@ -42,8 +42,8 @@ static void main_destroy(void)
     }
     Workers.clear();
 
-    if (options.sample.len)
-        fclose(sampleFile);
+    //if (options.sample.len)
+    //    fclose(sampleFile);
 
     if (options.pgn.len)
         pgnSeqWriter.seq_writer_destroy();
@@ -70,8 +70,8 @@ static void main_init(int argc, const char **argv)
     if (options.pgn.len)
         pgnSeqWriter.seq_writer_init(options.pgn.buf, "ae");
 
-    if (options.sample.len)
-        DIE_IF(0, !(sampleFile = fopen(options.sample.buf, "ae")));
+    //if (options.sample.len)
+    //    DIE_IF(0, !(sampleFile = fopen(options.sample.buf, "ae")));
 
     // Prepare Workers[]
     //Workers = vec_init(Worker);

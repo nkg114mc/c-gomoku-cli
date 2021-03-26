@@ -16,6 +16,8 @@
 
 #include <limits.h>
 #include <cstring>
+#include <string>
+#include <ctime>
 #include "game.h"
 #include "util.h"
 #include "vec.h"
@@ -417,23 +419,26 @@ void Game::game_decode_state(str_t *result, str_t *reason)
 
 void Game::game_export_pgn(int verbosity, str_t *out)
 {
-/*
-    str_cpy_fmt(out, "[Round \"%i.%i\"]\n", round + 1, game + 1);
-    str_cat_fmt(out, "[White \"%S\"]\n", names[WHITE]);
+    str_cat_fmt(out, "[Event \"?\"]\n");
+    str_cat_fmt(out, "[Site \"?\"]\n");
+
+    time_t rawtime;
+    struct tm * timeinfo;
+    char timeBuffer[128];
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    strftime(timeBuffer, sizeof(timeBuffer), "[Date \"%Y.%m.%d %H:%M:%S\"]", timeinfo);
+    str_cat_fmt(out, "%s\n", timeBuffer);
+
+    str_cat_fmt(out, "[Round \"%i.%i\"]\n", round + 1, game + 1);
     str_cat_fmt(out, "[Black \"%S\"]\n", names[BLACK]);
+    str_cat_fmt(out, "[White \"%S\"]\n", names[WHITE]);
 
     // Result in PGN format "1-0", "0-1", "1/2-1/2" (from white pov)
     scope(str_destroy) str_t result = str_init(), reason = str_init();
-    game_decode_state(g, &result, &reason);
+    game_decode_state(&result, &reason);
     str_cat_fmt(out, "[Result \"%S\"]\n", result);
     str_cat_fmt(out, "[Termination \"%S\"]\n", reason);
-
-    scope(str_destroy) str_t fen = str_init();
-    pos_get(&pos[0], &fen, sfen);
-    str_cat_fmt(out, "[FEN \"%S\"]\n", fen);
-
-    if (pos[0].chess960)
-        str_cat_c(out, "[Variant \"Chess960\"]\n");
 
     str_cat_fmt(out, "[PlyCount \"%i\"]\n", ply);
     scope(str_destroy) str_t san = str_init();
@@ -441,7 +446,7 @@ void Game::game_export_pgn(int verbosity, str_t *out)
     if (verbosity > 0) {
         // Print the moves
         str_push(out, '\n');
-
+/*
         const int pliesPerLine = verbosity == 2 ? 6
             : verbosity == 3 ? 5
             : 16;
@@ -488,10 +493,26 @@ void Game::game_export_pgn(int verbosity, str_t *out)
             // Append delimiter
             str_push(out, ply % pliesPerLine == 0 ? '\n' : ' ');
         }
+*/
+
+        const std::string dummyMovesStr1 = "1. d4 Nf6 2. c4 e6 3. Nf3 d5 4. Nc3 Bb4";
+        const std::string dummyMovesStr2 = "1. d4 Nf6 2. c4 e6 3. Nf3 d5 4. Nc3 Bb4 5. Bg5";
+        
+        std::string dummyMoves = "";
+        if ((this->ply) % 2 == 0) {
+            dummyMoves = dummyMovesStr1;
+        } else {
+            dummyMoves = dummyMovesStr2;
+        }
+        str_cat_fmt(out, "%s ", dummyMoves.c_str());
     }
 
     str_cat_c(str_cat(out, result), "\n\n");
-*/
+}
+
+void Game::game_export_sgf(int verbosity, str_t *out)
+{
+
 }
 
 /*
@@ -536,7 +557,3 @@ static Position resolve_pv(const Worker *w, const Game *g, const char *pv)
 }
 */
 
-void Game::game_export_sgf(int verbosity, str_t *out)
-{
-
-}

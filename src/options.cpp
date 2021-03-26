@@ -33,7 +33,7 @@ static void options_parse_sample(const char *s, Options *o)
 
     if (o->sampleFrequency > 1.0 || o->sampleFrequency < 0.0)
         DIE("Sample frequency '%f' must be between 0 and 1\n", o->sampleFrequency);
-
+/*
     // Parse resolve flag
     if ((tail = str_tok(tail, &token, ",")))
         o->sampleResolvePv = !strcmp(token.buf, "y");
@@ -42,7 +42,7 @@ static void options_parse_sample(const char *s, Options *o)
     if ((tail = str_tok(tail, &token, ",")))
         str_cpy(&o->sample, token);
     else
-        str_cpy_c(&o->sample, "sample.csv");
+        str_cpy_c(&o->sample, "sample.csv");*/
 }
 
 // Parse time control. Expects 'mtg/time+inc' or 'time+inc'. Note that time and inc are provided by
@@ -182,7 +182,7 @@ Options options_init(void)
     Options o = {0};
     o.openings = str_init();
     o.pgn = str_init();
-    o.sample = str_init();
+    //o.sample = str_init();
 
     // non-zero default values
     o.concurrency = 1;
@@ -281,7 +281,8 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
     o->log = true;
     //o->boardSize = 12;
     o->gameRule = 0;
-
+    str_cpy_c(&(o->pgn), "tmp.pgn");
+    o->pgnVerbosity = 1;
 
     EngineOptions engine1 = engine_options_init();
     str_cpy_c(&engine1.cmd, "./exmple-engine/pbrain-rapfi1");
@@ -304,5 +305,5 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
 
 void options_destroy(Options *o)
 {
-    str_destroy_n(&o->openings, &o->pgn, &o->sample);
+    str_destroy_n(&o->openings, &o->pgn, &o->sgf);
 }

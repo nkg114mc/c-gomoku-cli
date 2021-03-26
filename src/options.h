@@ -22,7 +22,7 @@
 #include "position.h"
 
 typedef struct {
-    str_t openings, pgn, sample, sgf;
+    str_t openings, pgn, sgf;
     SPRTParam sprtParam;
     uint64_t srand;
     double sampleFrequency;

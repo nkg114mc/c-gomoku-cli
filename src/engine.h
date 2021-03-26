@@ -50,4 +50,5 @@ public:
     void engine_about(Worker *w);
     // process MESSAGE, UNKNOWN, ERROR, DEBUG messages
     void engine_process_message_ifneeded(const char *line);
+    void engine_parse_thinking_messages(const char *line, Info *info);
 };
