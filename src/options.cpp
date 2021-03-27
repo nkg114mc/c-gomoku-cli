@@ -213,6 +213,7 @@ Options options_init(void)
     o.concurrency = 1;
     o.games = o.rounds = 1;
     o.sprtParam.alpha = o.sprtParam.beta = 0.05;
+    o.useTURN = false;
     o.boardSize = 15; // default size
     o.gameRule = GOMOKU_FIVE_OR_MORE;
     o.debug = false;

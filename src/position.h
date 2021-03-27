@@ -23,6 +23,8 @@
 typedef uint16_t move_t;
 typedef uint16_t Pos;
 
+const move_t NONE_MOVE = 0xFFFF;
+
 enum Color {BLACK, WHITE, EMPTY, WALL};
 
 #define BOARD_BOUNDARY 4
@@ -35,6 +37,12 @@ enum GameRule {
     RENJU = 4
 };
 
+const int RULES_COUNT = 3;
+const GameRule ALL_VALID_RULES[3] = {
+    GOMOKU_FIVE_OR_MORE,
+    GOMOKU_EXACT_FIVE,
+    RENJU 
+};
 
 class Position {
 public:

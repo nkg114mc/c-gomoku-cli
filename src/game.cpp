@@ -251,7 +251,7 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
     }
 
     scope(str_destroy) str_t cmd = str_init(), best = str_init();
-    move_t played = 0;
+    move_t played = NONE_MOVE;
     int drawPlyCount = 0;
     int resignCount[NB_COLOR] = {0};
     int ei = reverse;  // engines[ei] has the move
@@ -268,7 +268,7 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         std::vector<move_t> legalMoves;
         std::vector<move_t> forbiddenMoves;
 
-        if (played != 0) {
+        if (played != NONE_MOVE) {
             Position::pos_move_with_copy(&pos[ply], &pos[ply - 1], played);
         }
 
@@ -292,18 +292,18 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         gomocup_turn_info_command(eo[ei], timeLeft[ei], w, &(engines[ei]));
         
         // trigger think!
-        if (ply == 0) {
+        if (pos[ply].get_move_count() == 0) {
             engines[ei].engine_writeln(w, "BEGIN");
         } else {
-            if (false) { // use BOARD to trigger think
-                send_board_command(&(pos[ply]), w, &(engines[ei]));
-            } else { // use TURN to trigger think
+            if (o->useTURN) { // use TURN to trigger think
+                assert(ply == pos[ply].get_move_count()); // Can not do TURN when game history is unknown   
                 std::string last_move_str = pos[ply].move_to_gomostr(played);
                 printf("Get move str [%s]\n", last_move_str.c_str());
                 std::string turn_cmd = std::string("TURN ") + last_move_str;
                 char tmp[32];
                 strcpy(tmp, turn_cmd.c_str());
-                engines[ei].engine_writeln(w, tmp);
+            } else { // use BOARD to trigger think
+                send_board_command(&(pos[ply]), w, &(engines[ei]));
             }
         }
 
