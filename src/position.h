@@ -30,8 +30,9 @@ enum Color {BLACK, WHITE, EMPTY, WALL};
 #define NB_COLOR 2
 
 enum GameRule {
-    GOMOKU,
-    RENJU
+    GOMOKU_FIVE_OR_MORE = 0,
+    GOMOKU_EXACT_FIVE = 1,
+    RENJU = 4
 };
 
 

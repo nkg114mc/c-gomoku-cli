@@ -25,15 +25,14 @@ typedef struct {
     str_t openings, pgn, sgf;
     SPRTParam sprtParam;
     uint64_t srand;
-    double sampleFrequency;
     int concurrency, games, rounds;
     int resignCount, resignScore;
     int drawCount, drawScore;
-    int pgnVerbosity;
     bool log, random, repeat, sprt, gauntlet, sampleResolvePv;
     char pad[2];
     int boardSize;
     int gameRule;
+    bool debug;
 } Options;
 
 typedef struct {
@@ -49,3 +48,4 @@ void engine_options_destroy(EngineOptions *eo);
 Options options_init(void);
 void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo);
 void options_destroy(Options *o);
+void options_print(Options *o, EngineOptions **eo);

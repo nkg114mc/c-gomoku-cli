@@ -18,6 +18,7 @@
 #include <cstring>
 #include <string>
 #include <ctime>
+#include <iostream>
 #include "game.h"
 #include "util.h"
 #include "vec.h"
@@ -70,17 +71,17 @@ static bool forbidden_move(move_t move, const std::vector<move_t> moves)
     return false; // ok
 }
 
-void Game::game_init(int round, int game)
+void Game::game_init(int rd, int gm)
 {
-    round = round;
-    game = game;
+    this->round = rd;
+    this->game = gm;
 
-    names[BLACK] = str_init();
-    names[WHITE] = str_init();
+    this->names[BLACK] = str_init();
+    this->names[WHITE] = str_init();
 
-    pos = vec_init(Position);
-    info = vec_init(Info);
-    samples = vec_init(Sample);
+    this->pos = vec_init(Position);
+    this->info = vec_init(Info);
+    this->samples = vec_init(Sample);
 }
 
 bool Game::game_load_fen(const char *fen, int *color, const Options *o)
@@ -222,7 +223,7 @@ void Game::compute_time_left(const EngineOptions *eo, int64_t *timeLeft) {
     if (eo->timeoutMatch > 0) {
         // do nothing
     } else {
-        (*timeLeft) = INT64_MAX / 2;  // HACK: system_msec() + timeLeft must not overflow
+        (*timeLeft) = 2147483647LL;
     }
 }
 
@@ -328,6 +329,7 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         }
 
         if (!pos[ply].is_legal_move(played)) {
+            std::cout << "Illegal move: " << best.buf << std::endl;
             state = STATE_ILLEGAL_MOVE;
             break;
         }

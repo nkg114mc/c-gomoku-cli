@@ -176,6 +176,10 @@ bool Position::is_legal_move(move_t move) const {
             //}
         }
     }
+
+    std::cout << board[movePos] << std::endl;
+    std::cout << getPosX(movePos) << " " << getPosY(movePos) << std::endl;
+    
     return false; // not ok
 }
 

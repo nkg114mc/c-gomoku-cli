@@ -14,6 +14,7 @@
  *  not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <iostream>
 #include <assert.h>
 #include <ctype.h>
 #include <limits.h>
@@ -22,29 +23,8 @@
 #include "util.h"
 #include "vec.h"
 
-static void options_parse_sample(const char *s, Options *o)
-{
-    scope(str_destroy) str_t token = str_init();
-    const char *tail = str_tok(s, &token, ",");
-    assert(tail);
 
-    // Parse sample frequency (and check range)
-    o->sampleFrequency = atof(token.buf);
-
-    if (o->sampleFrequency > 1.0 || o->sampleFrequency < 0.0)
-        DIE("Sample frequency '%f' must be between 0 and 1\n", o->sampleFrequency);
 /*
-    // Parse resolve flag
-    if ((tail = str_tok(tail, &token, ",")))
-        o->sampleResolvePv = !strcmp(token.buf, "y");
-
-    // Parse filename (default sample.csv if omitted)
-    if ((tail = str_tok(tail, &token, ",")))
-        str_cpy(&o->sample, token);
-    else
-        str_cpy_c(&o->sample, "sample.csv");*/
-}
-
 // Parse time control. Expects 'mtg/time+inc' or 'time+inc'. Note that time and inc are provided by
 // the user in seconds, instead of msec.
 static void options_parse_tc(const char *s, EngineOptions *eo)
@@ -70,33 +50,65 @@ static void options_parse_tc(const char *s, EngineOptions *eo)
     eo->time = (int64_t)(time * 1000);
     eo->increment = (int64_t)(increment * 1000);
 }
+*/
+
+// Gomocup time control is in format 'matchtime|turntime' or only 'matchtime'
+static void options_parse_tc_gomocup(const char *s, EngineOptions *eo)
+{
+    //double time = 0, increment = 0;
+    double matchTime = 0;
+    double turnTime = 0;
+
+    // s = left+increment
+    scope(str_destroy) str_t left = str_init(), right = str_init();
+    str_tok(str_tok(s, &left, "+"), &right, "+");
+    double increment = atof(right.buf);
+
+    // parse left
+    if (strchr(left.buf, '/')) {
+        // left = matchtime|turntime
+        scope(str_destroy) str_t copy = str_init_from(left);
+        str_tok(str_tok(copy.buf, &left, "/"), &right, "/");
+        matchTime = atof(left.buf);
+        turnTime = atof(right.buf);
+    } else {
+        // left = matchTime
+        matchTime = atof(left.buf);
+    }
+
+    eo->timeoutMatch = (int64_t)(matchTime * 1000);
+    eo->timeoutTurn = (int64_t)(turnTime * 1000);
+}
 
 static int options_parse_eo(int argc, const char **argv, int i, EngineOptions *eo)
 {
-/*
+
     while (i < argc && argv[i][0] != '-') {
         const char *tail = NULL;
 
-        if ((tail = str_prefix(argv[i], "cmd=")))
+        if ((tail = str_prefix(argv[i], "cmd="))) {
             str_cpy_c(&eo->cmd, tail);
-        else if ((tail = str_prefix(argv[i], "name=")))
+        } else if ((tail = str_prefix(argv[i], "name="))) {
             str_cpy_c(&eo->name, tail);
-        else if ((tail = str_prefix(argv[i], "option.")))
-            vec_push(eo->options, str_init_from_c(tail));  // store "name=value" string
-        else if ((tail = str_prefix(argv[i], "depth=")))
+        } else if ((tail = str_prefix(argv[i], "option."))) {
+            vec_push(eo->options, str_init_from_c(tail), str_t);  // store "name=value" string
+        } else if ((tail = str_prefix(argv[i], "depth="))) {
             eo->depth = atoi(tail);
-        else if ((tail = str_prefix(argv[i], "nodes=")))
+        } else if ((tail = str_prefix(argv[i], "nodes="))) {
             eo->nodes = atoll(tail);
-        else if ((tail = str_prefix(argv[i], "movetime=")))
+        } else if ((tail = str_prefix(argv[i], "movetime="))) {
             eo->movetime = (int64_t)(atof(tail) * 1000);
-        else if ((tail = str_prefix(argv[i], "tc=")))
-            options_parse_tc(tail, eo);
-        else
+        } else if ((tail = str_prefix(argv[i], "maxmemory="))) {
+            eo->maxMemory = (int64_t)(atof(tail));
+        } else if ((tail = str_prefix(argv[i], "tc="))) {
+            options_parse_tc_gomocup(tail, eo);
+        } else {
             DIE("Illegal syntax '%s'\n", argv[i]);
+        }
 
         i++;
     }
-*/
+
     return i - 1;
 }
 
@@ -167,7 +179,20 @@ EngineOptions engine_options_init(void)
     EngineOptions eo = {0};
     eo.cmd = str_init();
     eo.name = str_init();
-    eo.options = (str_t *)vec_init(str_t);
+    eo.options = vec_init(str_t);
+
+    eo.maxMemory = 0;
+    eo.timeoutMatch = 0;
+    eo.timeoutTurn = 0;
+
+    // all others set to zero
+    eo.time = 0;
+    eo.increment = 0;
+    eo.movetime = 0;
+    eo.nodes = 0;
+    eo.depth = 0;
+    eo.movestogo = 0;
+
     return eo;
 }
 
@@ -182,22 +207,26 @@ Options options_init(void)
     Options o = {0};
     o.openings = str_init();
     o.pgn = str_init();
-    //o.sample = str_init();
+    o.sgf = str_init();
 
     // non-zero default values
     o.concurrency = 1;
     o.games = o.rounds = 1;
     o.sprtParam.alpha = o.sprtParam.beta = 0.05;
-    o.pgnVerbosity = 3;
     o.boardSize = 15; // default size
-    o.gameRule = GOMOKU;
+    o.gameRule = GOMOKU_FIVE_OR_MORE;
+    o.debug = false;
 
     return o;
 }
 
+void check_rule_code(GameRule gr) {
+
+}
+
 void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
 {
-/*
+
     scope(engine_options_destroy) EngineOptions each = engine_options_init();
     bool eachSet = false;
 
@@ -214,9 +243,9 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
             i = options_parse_eo(argc, argv, i + 1, &each);
             eachSet = true;
         } else if (!strcmp(argv[i], "-engine")) {
-            EngineOptions new = engine_options_init();
-            i = options_parse_eo(argc, argv, i + 1, &new);
-            vec_push(*eo, new);  // new gets moved here
+            EngineOptions newEn = engine_options_init();
+            i = options_parse_eo(argc, argv, i + 1, &newEn);
+            vec_push(*eo, newEn, EngineOptions);  // new gets moved here
         } else if (!strcmp(argv[i], "-games"))
             o->games = atoi(argv[++i]);
         else if (!strcmp(argv[i], "-rounds"))
@@ -225,19 +254,28 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
             i = options_parse_openings(argc, argv, i + 1, o);
         else if (!strcmp(argv[i], "-pgn")) {
             str_cpy_c(&o->pgn, argv[++i]);
-
-            if (i + 1 < argc && argv[i + 1][0] != '-')
-                o->pgnVerbosity = atoi(argv[++i]);
+        } else if (!strcmp(argv[i], "-sgf")) {
+            str_cpy_c(&o->sgf, argv[++i]);
         } else if (!strcmp(argv[i], "-resign"))
             i = options_parse_adjudication(argc, argv, i + 1, &o->resignCount, &o->resignScore);
         else if (!strcmp(argv[i], "-draw"))
             i = options_parse_adjudication(argc, argv, i + 1, &o->drawCount, &o->drawScore);
         else if (!strcmp(argv[i], "-sprt"))
             i = options_parse_sprt(argc, argv, i + 1, o);
-        else if (!strcmp(argv[i], "-sample"))
-            options_parse_sample(argv[++i], o);
-        else
+        else if (!strcmp(argv[i], "-rule")) {
+            o->gameRule = (GameRule)(atoi(argv[i + 1]));
+            i++;
+        } else if (!strcmp(argv[i], "-boardsize")) {
+            o->boardSize = atoi(argv[i + 1]);
+            if (o->boardSize < 5 || o->boardSize > 25) {
+                DIE("Only support board size of 5 ~ 25\n");
+            }
+            i++;
+        } else if (!strcmp(argv[i], "-debug")) {
+            o->debug = true;
+        } else {
             DIE("Unknown option '%s'\n", argv[i]);
+        }
     }
 
     if (eachSet) {
@@ -249,7 +287,7 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
                 str_cpy(&(*eo)[i].name, each.name);
 
             for (size_t j = 0; j < vec_size(each.options); j++)
-                vec_push((*eo)[i].options, str_init_from(each.options[j]));
+                vec_push((*eo)[i].options, str_init_from(each.options[j]), str_t);
 
             if (each.time)
                 (*eo)[i].time = each.time;
@@ -268,6 +306,15 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
 
             if (each.movestogo)
                 (*eo)[i].movestogo = each.movestogo;
+
+            if (each.timeoutMatch)
+                (*eo)[i].timeoutMatch = each.timeoutMatch;
+
+            if (each.timeoutTurn)
+                (*eo)[i].timeoutTurn = each.timeoutTurn;
+
+            if (each.maxMemory)
+                (*eo)[i].maxMemory = each.maxMemory;
         }
     }
 
@@ -276,13 +323,13 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
 
     if (vec_size(*eo) > 2 && o->sprt)
         DIE("only 2 engines for SPRT\n");
-*/
+    
+/*
     o->rounds = 1;
     o->log = true;
     //o->boardSize = 12;
     o->gameRule = 0;
     str_cpy_c(&(o->pgn), "tmp.pgn");
-    o->pgnVerbosity = 1;
 
     EngineOptions engine1 = engine_options_init();
     str_cpy_c(&engine1.cmd, "./exmple-engine/pbrain-rapfi1");
@@ -301,6 +348,51 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
     engine2.timeoutMatch = 180 * 1000;
     engine2.timeoutTurn = 10 * 1000;
     vec_push(*eo, engine2, EngineOptions);
+*/
+
+    options_print(o, eo);
+}
+
+void options_print(Options *o, EngineOptions **eo) {
+
+    std::cout << "---------------------------" << std::endl;
+    std::cout << "Global Options:" << std::endl;
+    std::cout << "openingss = " << o->openings.buf << std::endl;
+    std::cout << "boardSize = " << o->boardSize << std::endl;
+    std::cout << "gameRule = " << o->gameRule << std::endl;
+    std::cout << "pgn = " << o->pgn.buf << std::endl;
+    std::cout << "sgf = " << o->sgf.buf << std::endl;
+    std::cout << "log = " << o->log << std::endl;
+    std::cout << "random = " << o->random << std::endl;
+    std::cout << "repeat = " << o->repeat << std::endl;
+    std::cout << "sprt = " << o->sprt << std::endl;
+    std::cout << "gauntlet = " << o->gauntlet << std::endl;
+    std::cout << "concurrency = " << o->concurrency << std::endl;
+    std::cout << "games = " << o->games << std::endl;
+    std::cout << "rounds = " << o->rounds << std::endl;
+    std::cout << "resignCount = " << o->resignCount << std::endl;
+    std::cout << "resignScore = " << o->resignScore << std::endl;
+    std::cout << "drawCount = " << o->drawCount << std::endl;
+    std::cout << "drawScore = " << o->drawScore << std::endl;
+    std::cout << "debug = " << o->debug << std::endl;
+    std::cout << std::endl;
+
+    int engineCnt = vec_size(*eo);
+    std::cout << "Engine number = " << engineCnt << std::endl;
+    for (int i = 0 ; i < engineCnt; i++) {
+        EngineOptions *e1;
+        e1 = &((*eo)[i]);
+        std::cout << "---------------------------" << std::endl;
+        std::cout << "Engine " << i << " Options:" << std::endl;
+        std::cout << "name = " << e1->name.buf << std::endl;
+        std::cout << "cmd = " << e1->cmd.buf << std::endl;
+        std::cout << "nodes = " << e1->nodes << std::endl;
+        std::cout << "depth = " << e1->depth << std::endl;
+        std::cout << "timeoutTurn = " << e1->timeoutTurn << std::endl;
+        std::cout << "timeoutMatch = " << e1->timeoutMatch << std::endl;
+        std::cout << "maxMemory = " << e1->maxMemory << std::endl;
+    }
+    std::cout << "---------------------------" << std::endl;
 }
 
 void options_destroy(Options *o)

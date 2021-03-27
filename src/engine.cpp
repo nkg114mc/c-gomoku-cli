@@ -150,10 +150,6 @@ void Engine::engine_init(Worker *w, const char *cmd, const char *name, const str
     vec_destroy_rec(args, str_destroy);
     free(argv);
 
-/*
-    // Start the uci..uciok dialogue
-    // No such thing in gomocup
-*/
     // parse engine ABOUT infomation
     engine_about(w);
 

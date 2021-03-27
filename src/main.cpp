@@ -14,6 +14,7 @@
  *  not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <iostream>
 #include <pthread.h>
 #include <stdlib.h>
 #include "engine.h"
@@ -31,7 +32,7 @@ static Options options;
 static EngineOptions *eo;
 static Openings openings;
 static SeqWriter pgnSeqWriter;
-//FILE *sampleFile;
+static SeqWriter sgfSeqWriter;
 static JobQueue jq;
 
 static void main_destroy(void)
@@ -42,11 +43,11 @@ static void main_destroy(void)
     }
     Workers.clear();
 
-    //if (options.sample.len)
-    //    fclose(sampleFile);
-
     if (options.pgn.len)
         pgnSeqWriter.seq_writer_destroy();
+
+    if (options.sgf.len)
+        sgfSeqWriter.seq_writer_destroy();
 
     openings.openings_destroy(0);
     jq.job_queue_destroy();
@@ -60,31 +61,32 @@ static void main_init(int argc, const char **argv)
 
     initZobrish();
 
-    eo = (EngineOptions*)vec_init(EngineOptions);
+    eo = vec_init(EngineOptions);
     options = options_init();
     options_parse(argc, argv, &options, &eo);
 
     jq.job_queue_init(vec_size(eo), options.rounds, options.games, options.gauntlet);
     openings.openings_init(options.openings.buf, options.random, options.srand, 0);
 
-    if (options.pgn.len)
+    if (options.pgn.len) {
         pgnSeqWriter.seq_writer_init(options.pgn.buf, "ae");
+    }
 
-    //if (options.sample.len)
-    //    DIE_IF(0, !(sampleFile = fopen(options.sample.buf, "ae")));
+    if (options.sgf.len) {
+        sgfSeqWriter.seq_writer_init(options.sgf.buf, "ae");
+    }
 
     // Prepare Workers[]
-    //Workers = vec_init(Worker);
 
     for (int i = 0; i < options.concurrency; i++) {
         scope(str_destroy) str_t logName = str_init();
 
-        if (options.log)
+        if (options.log) {
             str_cat_fmt(&logName, "c-gomoku-cli.%i.log", i + 1);
+        }
 
         Worker wker;
         wker.worker_init(i, logName.buf);
-        //vec_push(Workers, wker);
         Workers.push_back(wker);
     }
 }
@@ -101,7 +103,7 @@ static void *thread_start(void *arg)
 
     while (jq.job_queue_pop(&job, &idx, &count)) {
         // Engine stop/start, as needed
-        for (int i = 0; i < 2; i++)
+        for (int i = 0; i < 2; i++) {
             if (job.ei[i] != ei[i]) {
                 if (engines[i].pid) {
                     engines[i].engine_destroy(w);
@@ -111,7 +113,8 @@ static void *thread_start(void *arg)
                 engines[i].engine_init(w, eo[ei[i]].cmd.buf, eo[ei[i]].name.buf, eo[ei[i]].options);
                 jq.job_queue_set_name(ei[i], engines[i].name.buf);
             }
-
+        }
+    
         // Choose opening position
         openings.openings_next(&fen, options.repeat ? idx / 2 : idx, w->id);
 
@@ -134,15 +137,16 @@ static void *thread_start(void *arg)
 
         // Write to PGN file
         if (options.pgn.len) {
+            int pgnVerbosity = 3;
             scope(str_destroy) str_t pgnText = str_init();
-            game.game_export_pgn(options.pgnVerbosity, &pgnText);
+            game.game_export_pgn(pgnVerbosity, &pgnText);
             pgnSeqWriter.seq_writer_push(idx, pgnText);
         }
 
         // Write to SGF file
         if (options.sgf.len) {
             scope(str_destroy) str_t sgfText = str_init();
-            game.game_export_sgf(options.pgnVerbosity, &sgfText);
+            game.game_export_sgf(3, &sgfText);
             //fputs(sgfText.buf, sgfFile);
         }
 

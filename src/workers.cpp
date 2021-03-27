@@ -59,6 +59,7 @@ void Worker::worker_init(int i, const char *logName)
     pthread_mutex_init(&deadline.mtx, NULL);
     deadline.engineName = str_init();
 
+    log = NULL;
     if (*logName) {
         log = fopen(logName, "we");
         DIE_IF(0, !log);
