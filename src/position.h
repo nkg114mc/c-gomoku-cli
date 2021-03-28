@@ -79,6 +79,10 @@ public:
     bool check_five_in_line_side(Color side, bool allow_long_connection = true) const;
     bool check_five_in_line_lastmove(bool allow_long_connection) const;
 
+    // about opening
+    bool apply_openning_plaintext(str_t &opening_str);
+    bool parse_openning_line_str(std::vector<Pos> &openning_pos, str_t &linestr, int boardSz);
+
     // static methods
     static void pos_move_with_copy(Position *after, const Position *before, move_t m);
     static bool is_valid_move_gomostr(char *move_str);
@@ -98,6 +102,7 @@ private:
 	void setPiece(Pos pos, Color piece);
 	void delPiece(Pos pos);
     bool isInBoard(Pos pos) const;
+    bool isInBoardXY(int x, int y) const;
 
 };
 

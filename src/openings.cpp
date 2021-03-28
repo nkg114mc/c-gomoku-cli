@@ -14,6 +14,8 @@
  *  not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <sstream>
+#include <string>
 #include <assert.h>
 #include "openings.h"
 #include "util.h"
@@ -24,8 +26,9 @@ void Openings::openings_init(const char *fileName, bool random, uint64_t srand, 
     //index = vec_init(size_t);
     index = (long*) vec_init(size_t);
 
-    if (*fileName)
+    if (*fileName) {
         DIE_IF(threadId, !(file = fopen(fileName, "re")));
+    }
 
     if (file) {
         // Fill o.index[] to record file offsets for each lines
@@ -49,9 +52,10 @@ void Openings::openings_init(const char *fileName, bool random, uint64_t srand, 
                 long tmp = index[i];
                 index[i] = index[j];
                 index[j] = tmp;
-                //swap(index[i], index[j]);
             }
         }
+
+        printf("Load opening file %s\n", fileName);
     }
 
     pthread_mutex_init(&mtx, NULL);
@@ -69,7 +73,7 @@ void Openings::openings_destroy(int threadId)
 void Openings::openings_next(str_t *fen, size_t idx, int threadId)
 {
     if (!file) {
-        str_cpy_c(fen, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        str_cpy_c(fen, "");
         return;
     }
 
@@ -81,5 +85,47 @@ void Openings::openings_next(str_t *fen, size_t idx, int threadId)
     DIE_IF(threadId, !str_getline(&line, file));
     pthread_mutex_unlock(&mtx);
 
-    str_tok(line.buf, fen, ";");
+    //str_tok(line.buf, fen, ";");
+    str_cpy(fen, line);
+
+    assert(openings_validate_opening_str(*fen));
+}
+
+
+bool Openings::openings_validate_opening_str(str_t &line) {
+
+    std::stringstream ss;
+    for (int i = 0; i < line.len; i++) {
+        char ch = line.buf[i];
+        if ((ch <= '9' && ch >= '0') || ch == '-') {
+            ss << ch;
+        } else {
+            ss << ' '; 
+        }
+    }
+
+    int cnt = 0;
+    int maxOffset = 32 / 2;
+
+    int ofst = -9999;
+    while (ss >> ofst) {
+        if (ofst != -9999) {
+            if (ofst >= -16 && ofst <= 15) {
+                cnt++;
+            } else {
+                printf("Coord offset is too large: %d!\n", ofst);
+                return false;
+            }
+        } else {
+            printf("Invalid coord offset: %d!\n", ofst);
+            return false;
+        }
+        ofst = -9999;
+    }
+
+    if (cnt % 2 != 0) {
+        printf("Coord offsets are not paired (total %d offsets)!\n", cnt);
+        return false;
+    }
+    return true;
 }

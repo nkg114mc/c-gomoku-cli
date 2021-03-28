@@ -31,6 +31,8 @@ public:
     void openings_destroy(int threadId);
 
     void openings_next(str_t *fen, size_t idx, int threadId);
+
+    static bool openings_validate_opening_str(str_t &line);
 };
 
 

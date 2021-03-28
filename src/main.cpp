@@ -15,6 +15,7 @@
  */
 
 #include <iostream>
+#include <assert.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include "engine.h"
@@ -121,9 +122,9 @@ static void *thread_start(void *arg)
         // Play 1 game
         Game game;
         game.game_init(job.round, job.game);
-        int color = BLACK; // black play first in gomoku/renju
+        int color = BLACK; // black play first in gomoku/renju by default
 
-        if (!game.game_load_fen(fen.buf, &color, &options)) {
+        if (!game.game_load_fen(&fen, &color, &options)) {
             DIE("[%d] illegal FEN '%s'\n", w->id, fen.buf);
         }
 
@@ -184,10 +185,35 @@ static void *thread_start(void *arg)
 
     return NULL;
 }
+/*
+void test_openning() {
 
+    std::string fn = "/Users/chaom/workplace/gomokus/gomocup2020results/openings/openings_freestyle.txt";
+    openings.openings_init(fn.c_str(), false, 0, 0);
+
+    int osize = vec_size(openings.index);
+    std::cout << "openning size = " << osize << std::endl;
+
+    scope(str_destroy) str_t fen = str_init();
+    for (int i = 0; i < osize; i++) {
+        openings.openings_next(&fen, i, 0);
+        std::cout << "fen = " << fen.buf << std::endl;
+        assert(Openings::openings_validate_opening_str(fen));
+
+        Position bd(20);
+        bd.apply_openning_plaintext(fen);
+
+        bd.pos_print();
+    }
+    
+    //exit(0);
+}
+*/
 int main(int argc, const char **argv)
 {
     main_init(argc, argv);
+
+    //test_openning();
 
     // Start threads[]
     pthread_t threads[options.concurrency];

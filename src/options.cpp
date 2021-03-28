@@ -208,6 +208,7 @@ Options options_init(void)
     o.openings = str_init();
     o.pgn = str_init();
     o.sgf = str_init();
+    o.plaintext = str_init();
 
     // non-zero default values
     o.concurrency = 1;
@@ -283,6 +284,7 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
             i++;
         } else if (!strcmp(argv[i], "-debug")) {
             o->debug = true;
+            o->log = true; // enable log if debug is enabled
         } else {
             DIE("Unknown option '%s'\n", argv[i]);
         }

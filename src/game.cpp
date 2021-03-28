@@ -84,19 +84,18 @@ void Game::game_init(int rd, int gm)
     this->samples = vec_init(Sample);
 }
 
-bool Game::game_load_fen(const char *fen, int *color, const Options *o)
+bool Game::game_load_fen(str_t *fen, int *color, const Options *o)
 {
     //vec_push(pos, (Position){0}, Position);
     Position p0(o->boardSize);
     vec_push(pos, p0, Position);
-/*
-    if (pos_set(&pos[0], fen, false, &sfen)) {
-        *color = pos[0].turn;
+
+    if (pos[0].apply_openning_plaintext(*fen)) {
+        *color = pos[0].get_turn();
         return true;
-    } else
+    } else {
         return false;
-*/
-    return true;
+    }
 }
 
 void Game::game_destroy()
@@ -234,6 +233,9 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
 // - sets state value: see enum STATE_* codes
 // - returns RESULT_LOSS/DRAW/WIN from engines[0] pov
 {
+    // initialize game rule
+    this->game_rule = (GameRule)(o->gameRule);
+
     for (int color = BLACK; color <= WHITE; color++) {
         str_cpy(&names[color], engines[color ^ pos[0].get_turn() ^ reverse].name);
     }

@@ -22,7 +22,7 @@
 #include "position.h"
 
 typedef struct {
-    str_t openings, pgn, sgf;
+    str_t openings, pgn, sgf, plaintext;
     SPRTParam sprtParam;
     uint64_t srand;
     int concurrency, games, rounds;

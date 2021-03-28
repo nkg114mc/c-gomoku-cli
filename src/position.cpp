@@ -47,6 +47,11 @@ inline move_t buildMoveReal(int x, int y, Color side) {
     move_t m = (side << 10) | preal;
     return m;
 }
+inline move_t buildMovePos(Pos p, Color side) { 
+    assert(side == WHITE || side == BLACK);
+    move_t m = (side << 10) | p;
+    return m;
+}
 
 Color OPPSITE_COLOR[4] = {
 	WHITE, BLACK, EMPTY, WALL
@@ -162,6 +167,14 @@ void Position::gen_all_legal_moves(std::vector<move_t> &legal_moves) const {
 bool Position::isInBoard(Pos pos) const {
 	assert(pos < MaxBoardSizeSqr);
 	return (board[pos] != WALL);
+}
+
+bool Position::isInBoardXY(int x, int y) const {
+	if ((x >= 0 && x < boardSize) && 
+        (y >= 0 && y < boardSize)) {
+        return true;
+    }
+	return false;
 }
 
 bool Position::is_legal_move(move_t move) const {
@@ -371,6 +384,69 @@ std::string Position::move_to_gomostr(move_t move) const {
     std::stringstream ss("");
     ss << x << "," << y;
     return ss.str();
+}
+
+// apply the openning str in the format of plain
+bool Position::apply_openning_plaintext(str_t &opening_str) {
+
+    std::vector<Pos> openning_pos;
+    bool parsingOk = parse_openning_line_str(openning_pos, opening_str, this->boardSize);
+    if (!parsingOk) {
+        return false;
+    }
+
+    clear(); // set board to init
+    for (int i = 0; i < openning_pos.size(); i++) {
+        move_t mv = buildMovePos(openning_pos[i], this->get_turn());
+        move(mv); // make opening move
+    }
+    return true;
+}
+
+bool Position::parse_openning_line_str(std::vector<Pos> &openning_pos, str_t &linestr, int boardSz) {
+    openning_pos.clear();
+    int hboardSize = boardSz / 2;
+
+    std::stringstream ss;
+    for (int i = 0; i < linestr.len; i++) {
+        char ch = linestr.buf[i];
+        if ((ch <= '9' && ch >= '0') || ch == '-') {
+            ss << ch;
+        } else {
+            ss << ' '; 
+        }
+    }
+
+    int cnt = 0;
+    int maxOffset = 32 / 2;
+
+    int ofst = -9999;
+    int buff[3];
+    while (ss >> ofst) {
+        if (ofst != -9999) {
+            if (ofst >= -16 && ofst <= 15) {
+                buff[cnt] = ofst;
+                cnt++;
+                if (cnt == 2) {
+                    int currx = buff[0] + hboardSize;
+                    int curry = buff[1] + hboardSize;
+                    if (!isInBoardXY(currx, curry)) {
+                        printf("Can not apply openning, the current board is too small.");
+                        return false;
+                    }
+                    assert(isInBoardXY(currx, curry));
+                    
+                    Pos p = POS(currx, curry);
+                    openning_pos.push_back(p);
+
+                    cnt = 0;
+                }
+            }
+        }
+        ofst = -9999;
+    }
+
+    return true; // ok
 }
 
 // this is a static method
