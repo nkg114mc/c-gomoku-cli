@@ -23,6 +23,8 @@
     #include <unistd.h>
 #endif
 
+#include <iostream>
+#include <sstream>
 #include <assert.h>
 #include <limits.h>
 #include <pthread.h>
@@ -269,7 +271,61 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
     return result;
 }
 
-// process 
+static void parse_and_display_engine_about(str_t &line) {
+    int flag = 0;
+    std::vector<std::string> tokens;
+    std::stringstream ss;
+    for (int i = 0; i < line.len; i++) {
+        char ch = line.buf[i];
+        if (ch == '\"') {
+            flag = (flag + 1) % 2;
+        } else if (ch == ',' || ch == ' ' || ch == '=') {
+            if (flag > 0) {
+                ss << ch;
+            } else {
+                if (ss.str().length() > 0) {
+                    tokens.push_back(ss.str());
+                }
+                ss.clear();
+                ss.str("");
+            }
+        } else {
+            ss << ch;
+        }
+    }
+    if (ss.str().length() > 0) {
+        tokens.push_back(ss.str());
+    }
+
+    std::string name = "?";
+    std::string author = "?";
+    std::string version = "?";
+    std::string country = "?";
+    for (int i = 0; i < tokens.size(); i++) {
+        if (tokens[i] == "name") {
+            if ((i + 1) < tokens.size()) {
+                name = tokens[i + 1];
+            }
+        } else if (tokens[i] == "version") {
+            if ((i + 1) < tokens.size()) {
+                version = tokens[i + 1];
+            }
+            
+        } else if (tokens[i] == "author") {
+            if ((i + 1) < tokens.size()) {
+                author = tokens[i + 1];
+            }
+        } else if (tokens[i] == "country") {
+            if ((i + 1) < tokens.size()) {
+                country = tokens[i + 1];
+            }
+        }
+    }
+    std::cout << "Load engine: " << name << " (version " << version << ") by " << author << ", " << country << std::endl;
+    exit(0);
+}
+
+// process engine ABOUT command
 void Engine::engine_about(Worker *w) {
     w->deadline_set(name.buf, system_msec() + 2000);
     engine_writeln(w, "ABOUT");
@@ -277,10 +333,11 @@ void Engine::engine_about(Worker *w) {
 
     engine_readln(w, &line);
 
-    // parse about infos
-    printf("Get Engine About:[%s]\n", line.buf);
-
     w->deadline_clear();
+    
+    // parse about infos
+    //printf("Get Engine About:[%s]\n", line.buf);
+    parse_and_display_engine_about(line);
 }
 
 // process MESSAGE, UNKNOWN, ERROR, DEBUG messages
