@@ -222,7 +222,16 @@ Options options_init(void)
 }
 
 void check_rule_code(GameRule gr) {
-
+    bool supported = false;
+    for (int i = 0; i < RULES_COUNT; i++) {
+        if (ALL_VALID_RULES[i] == gr) {
+            supported = true;
+            break;
+        }
+    }
+    if (!supported) {
+        DIE("Unspported game rule code '%i'!\n", gr);
+    }
 }
 
 void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)

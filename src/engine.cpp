@@ -322,7 +322,6 @@ static void parse_and_display_engine_about(str_t &line) {
         }
     }
     std::cout << "Load engine: " << name << " (version " << version << ") by " << author << ", " << country << std::endl;
-    exit(0);
 }
 
 // process engine ABOUT command
@@ -374,7 +373,7 @@ void Engine::engine_process_message_ifneeded(const char *line)
 
 void Engine::engine_parse_thinking_messages(const char *line, Info *info)
 {
-            /*
+    /*
             while ((tail = str_tok(tail, &token, " "))) {
                 if (!strcmp(token.buf, "depth")) {
                     if ((tail = str_tok(tail, &token, " ")))
@@ -392,9 +391,8 @@ void Engine::engine_parse_thinking_messages(const char *line, Info *info)
                 } else if (!strcmp(token.buf, "pv")) {
                     str_cpy_c(pv, tail + strspn(tail, " "));
                 }
-            }*/
-
-    
+            }
+    */
 }
 
 /*
