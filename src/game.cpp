@@ -25,7 +25,6 @@
 #include "options.h"
 #include "position.h"
 
-
 // Applies rules to generate legal moves, and determine the state of the game
 static int game_apply_rules(const Game *g, std::vector<move_t> legal_moves, std::vector<move_t> forbidden_moves)
 {
@@ -177,17 +176,27 @@ void Game::gomocup_game_info_command(const EngineOptions *eo[2], int ei,
     }
 }
 
+int colorToGomocupStoneIdx(Color c) {
+    switch (c) {
+    case BLACK:
+        return 1;
+    case WHITE:
+        return 2;
+    }
+    assert(false);
+}
 
 void Game::send_board_command(Position *pos, Worker *w, Engine *engine)
 {
     engine->engine_writeln(w, "BOARD");
 
     int moveCnt = pos->get_move_count();
-    Pos *histMoves = pos->get_hist_moves();
+    move_t *histMoves = pos->get_hist_moves();
 
-    int gomocupColorIdx = 1;
     for (int i = 0; i < moveCnt; i++) {
-        Pos p = histMoves[i];
+        Color color = getColorFromMove(histMoves[i]);
+        int gomocupColorIdx = colorToGomocupStoneIdx(color);
+        Pos p = getPosFromMove(histMoves[i]);
         int x = Position::getPosX(p);
         int y = Position::getPosY(p);
         scope(str_destroy) str_t cmd = str_init();
@@ -195,7 +204,7 @@ void Game::send_board_command(Position *pos, Worker *w, Engine *engine)
         str_cat_fmt(&cmd, "%i,%i,%i", x, y, gomocupColorIdx);
         engine->engine_writeln(w, cmd.buf);
 
-        gomocupColorIdx = (gomocupColorIdx % 2 + 1);
+        //gomocupColorIdx = (gomocupColorIdx % 2 + 1);
     }
 
     engine->engine_writeln(w, "DONE");
@@ -235,6 +244,7 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
 {
     // initialize game rule
     this->game_rule = (GameRule)(o->gameRule);
+    this->board_size = o->boardSize;
 
     for (int color = BLACK; color <= WHITE; color++) {
         str_cpy(&names[color], engines[color ^ pos[0].get_turn() ^ reverse].name);
@@ -278,6 +288,7 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
 
         state = game_apply_rules(this, legalMoves, forbiddenMoves);
         if (state > STATE_NONE) {
+            pos[ply].pos_print();
             break;
         }
 /*
@@ -514,9 +525,125 @@ void Game::game_export_pgn(int verbosity, str_t *out)
     str_cat_c(str_cat(out, result), "\n\n");
 }
 
-void Game::game_export_sgf(int verbosity, str_t *out)
+void Game::game_export_sgf(str_t *out)
 {
+    str_cat_c(out, "(");
+    str_cat_c(out, ";FF[4]GM[4]"); // common info
+    
+    str_cat_c(out, "EV[?]");
+    time_t rawtime;
+    struct tm * timeinfo;
+    char timeBuffer[128];
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    strftime(timeBuffer, sizeof(timeBuffer), "DT[%Y.%m.%d %H:%M:%S]", timeinfo);
+    str_cat_fmt(out, "%s", timeBuffer);
+    str_cat_fmt(out, "RO[%i.%i]", round + 1, game + 1);
+    str_cat_fmt(out, "RU[%i]", game_rule);
+    str_cat_fmt(out, "SZ[%i]", board_size);
+    str_cat_fmt(out, "TM[%s]", "0000");
+    str_cat_fmt(out, "BP[%S]", names[BLACK]);
+    str_cat_fmt(out, "WP[%S]", names[WHITE]);
 
+    // Result in PGN format "1-0", "0-1", "1/2-1/2" (from white pov)
+    scope(str_destroy) str_t result = str_init(), reason = str_init();
+    game_decode_state(&result, &reason);
+    str_cat_fmt(out, "RE[%S]", result);
+    str_cat_fmt(out, "TE[%S]", reason);
+
+    //str_cat_fmt(out, "[PlyCount \"%i\"]\n", ply);
+    scope(str_destroy) str_t san = str_init();
+
+    str_push(out, '\n');
+
+    // Print the moves
+
+    //if (ply != ) {
+
+    //}
+
+    Position* lastPos = &(pos[ply]);
+    move_t* histMove = lastPos->get_hist_moves();
+    for (int j = 0; j < lastPos->get_move_count(); j++) {
+        str_push(out, ';');
+    
+        Color color = getColorFromMove(histMove[j]);
+        Pos p = getPosFromMove(histMove[j]);
+    
+        char coord[3];
+        coord[0] = (char)(Position::getPosX(p) + 'a');
+        coord[1] = (char)(Position::getPosY(p) + 'a');
+        coord[2] = '\0';
+        if (color == BLACK) {
+            str_cat_fmt(out, "B[%s]", coord);
+        } else if (color == WHITE) {
+            str_cat_fmt(out, "W[%s]", coord);
+        }
+    }
+
+    //for (int i = 1; i <= this->ply; i++) {
+
+        
+
+    //}
+/*
+        for (int ply = 1; ply <= ply; ply++) {
+            // Write move number
+            if (pos[ply - 1].turn == WHITE || ply == 1)
+                str_cat_fmt(out, pos[ply - 1].turn == WHITE ? "%i. " : "%i... ",
+                    pos[ply - 1].fullMove);
+
+            // Append SAN move
+            pos_move_to_san(&pos[ply - 1], pos[ply].lastMove, &san);
+            str_cat(out, san);
+
+            // Append check marker
+            if (pos[ply].checkers) {
+                if (ply == ply && state == STATE_CHECKMATE)
+                    str_push(out, '#');  // checkmate
+                else
+                    str_push(out, '+');  // normal check
+            }
+
+            // Write PGN comment
+            const int depth = info[ply - 1].depth, score = info[ply - 1].score;
+
+            if (verbosity == 2) {
+                if (score > INT_MAX / 2)
+                    str_cat_fmt(out, " {M%i/%i}", INT_MAX - score, depth);
+                else if (score < INT_MIN / 2)
+                    str_cat_fmt(out, " {-M%i/%i}", score - INT_MIN, depth);
+                else
+                    str_cat_fmt(out, " {%i/%i}", score, depth);
+            } else if (verbosity == 3) {
+                const int64_t time = info[ply - 1].time;
+
+                if (score > INT_MAX / 2)
+                    str_cat_fmt(out, " {M%i/%i %Ims}", INT_MAX - score, depth, time);
+                else if (score < INT_MIN / 2)
+                    str_cat_fmt(out, " {-M%i/%i %Ims}", score - INT_MIN, depth, time);
+                else
+                    str_cat_fmt(out, " {%i/%i %Ims}", score, depth, time);
+            }
+
+            // Append delimiter
+            str_push(out, ply % pliesPerLine == 0 ? '\n' : ' ');
+        }
+
+
+        const std::string dummyMovesStr1 = "1. d4 Nf6 2. c4 e6 3. Nf3 d5 4. Nc3 Bb4";
+        const std::string dummyMovesStr2 = "1. d4 Nf6 2. c4 e6 3. Nf3 d5 4. Nc3 Bb4 5. Bg5";
+        
+        std::string dummyMoves = "";
+        if ((this->ply) % 2 == 0) {
+            dummyMoves = dummyMovesStr1;
+        } else {
+            dummyMoves = dummyMovesStr2;
+        }
+        str_cat_fmt(out, "%s ", dummyMoves.c_str());
+    }
+*/
+    str_cat_c(out, ")\n\n");
 }
 
 /*

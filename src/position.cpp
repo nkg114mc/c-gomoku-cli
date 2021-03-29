@@ -30,10 +30,10 @@ inline Pos POS_R(uint8_t x = 0, uint8_t y = 0) { return (x << MAX_BOARD_SIZE_BIT
 inline Pos POS(uint8_t x = 0, uint8_t y = 0) { return POS_R(x + BOARD_BOUNDARY, y + BOARD_BOUNDARY); }
 inline uint8_t CoordX(Pos p) { return (p >> MAX_BOARD_SIZE_BIT) - BOARD_BOUNDARY; }
 inline uint8_t CoordY(Pos p) { return (p & ((1 << MAX_BOARD_SIZE_BIT) - 1)) - BOARD_BOUNDARY; }
-inline Pos getPosFromMove(move_t move) { return (Pos)(move & POS_MASK); }
 inline int getXFromMove(move_t move) { return CoordX(getPosFromMove(move)); }
 inline int getYFromMove(move_t move) { return CoordY(getPosFromMove(move)); }
-inline Color getColorFromMove(move_t move) { return (Color)(move >> 10); }
+Pos getPosFromMove(move_t move) { return (Pos)(move & POS_MASK); }
+Color getColorFromMove(move_t move) { return (Color)(move >> 10); }
 
 inline move_t buildMove(int x, int y, Color side) { 
     assert(side == WHITE || side == BLACK);
@@ -70,6 +70,7 @@ void Position::initBoard(int size) {
     for (int i = 0; i < MaxBoardSizeSqr; i++) {
 		board[i] = (CoordX(i) >= 0 && CoordX(i) < boardSize && CoordY(i) >= 0 && CoordY(i) < boardSize) ? EMPTY : WALL;
 	}
+    winConnectionLen = 0;
 }
 
 // init without size change
@@ -89,7 +90,7 @@ Position::Position(int bSize) {
 void Position::move(move_t m) {
     Pos pos = getPosFromMove(m);
 	setPiece(pos, playerToMove);
-	historyMoves[moveCount] = pos;
+	historyMoves[moveCount] = m;
 	playerToMove = opponent_color(playerToMove);
     key ^= zobristTurn[playerToMove];
 	moveCount++;
@@ -98,7 +99,8 @@ void Position::move(move_t m) {
 void Position::undo() {
 	assert(moveCount > 0);
 	moveCount--;
-	delPiece(historyMoves[moveCount]);
+    Pos lastPos = getPosFromMove(historyMoves[moveCount]);
+	delPiece(lastPos);
     key ^= zobristTurn[playerToMove];
 	playerToMove = opponent_color(playerToMove);
 }
@@ -111,11 +113,18 @@ void Position::pos_print() const
 		std::cout << "--";
 	}
 	std::cout << std::endl;
+
+    Color bd2[1024];
+    memcpy(bd2, board, 1024 * sizeof(Color));
+
+    for (int i = 0; i < winConnectionLen; i++) {
+        bd2[winConnectionPos[i]] = WALL;
+    }
 	
 	for (int j = 0; j < boardSize; j++) {
 		std::cout << "  ";
 		for (int i = 0; i < boardSize; i++) {
-			Color piece = board[POS(i, j)];
+			Color piece = bd2[POS(i, j)];
 			std::string ch = ". ";
 			if (piece == WALL) {
 				ch = "# ";
@@ -202,22 +211,30 @@ void Position::compute_forbidden_moves(std::vector<move_t> &forbidden_moves) con
 
 }
 
-void check_five_helper(bool allow_long_connc, int &conCnt, int & fiveCnt) {
+void Position::check_five_helper(bool allow_long_connc, int &conCnt, int & fiveCnt, Pos* connectionLine) {
+    bool foundFive = false;
     if (allow_long_connc) {
         if (conCnt >= 5) {
             fiveCnt++;
+            foundFive = true;
         }
     } else {
         if (conCnt == 5) {
             fiveCnt++;
+            foundFive = true;
         }
+    }
+
+    if (foundFive) {
+        memcpy(winConnectionPos, connectionLine, conCnt * sizeof(Pos));
+        winConnectionLen = conCnt;
     }
 }
 
 // check if there exist any line-of-n-piece-in-same-color exists for side-to-move
 // if allow_long_connection, return true if n >= 5
 // if allow_long_connection, return true if and only if n == 5
-bool Position::check_five_in_line_side(Color side, bool allow_long_connection) const {
+bool Position::check_five_in_line_side(Color side, bool allow_long_connection) { // const {
     assert(side == WHITE || side == BLACK);
 
     //if (moveCount >= 10) {
@@ -226,6 +243,7 @@ bool Position::check_five_in_line_side(Color side, bool allow_long_connection) c
 
     int i, j, k;
     int fiveCount = 0;
+    Pos connectionLine[32];
 
     for (i = 0; i < boardSize; i++) {
         int continueCount = 0;
@@ -233,12 +251,13 @@ bool Position::check_five_in_line_side(Color side, bool allow_long_connection) c
             Pos p = POS(i, j);
             if (board[p] == side) {
                 continueCount++;
+                connectionLine[continueCount - 1] = p;
             } else {
-                check_five_helper(allow_long_connection, continueCount, fiveCount);
+                check_five_helper(allow_long_connection, continueCount, fiveCount, connectionLine);
                 continueCount = 0;
             }
         }
-        check_five_helper(allow_long_connection, continueCount, fiveCount);
+        check_five_helper(allow_long_connection, continueCount, fiveCount, connectionLine);
     }
 
     for (j = 0; j < boardSize; j++) {
@@ -247,12 +266,13 @@ bool Position::check_five_in_line_side(Color side, bool allow_long_connection) c
             Pos p = POS(i, j);
             if (board[p] == side) {
                 continueCount++;
+                connectionLine[continueCount - 1] = p;
             } else {
-                check_five_helper(allow_long_connection, continueCount, fiveCount);
+                check_five_helper(allow_long_connection, continueCount, fiveCount, connectionLine);
                 continueCount = 0;
             }
         }
-        check_five_helper(allow_long_connection, continueCount, fiveCount);
+        check_five_helper(allow_long_connection, continueCount, fiveCount, connectionLine);
     }
 
     for (k = -(boardSize - 1); k < boardSize; k++) {
@@ -268,14 +288,15 @@ bool Position::check_five_in_line_side(Color side, bool allow_long_connection) c
             Pos p = POS(i, j);
             if (board[p] == side) {
                 continueCount++;
+                connectionLine[continueCount - 1] = p;
             } else {
-                check_five_helper(allow_long_connection, continueCount, fiveCount);
+                check_five_helper(allow_long_connection, continueCount, fiveCount, connectionLine);
                 continueCount = 0;
             }
             i += 1;
             j += 1;
         }
-        check_five_helper(allow_long_connection, continueCount, fiveCount);
+        check_five_helper(allow_long_connection, continueCount, fiveCount, connectionLine);
     }
 
     for (k = 0; k < (boardSize * 2 - 1); k++) {
@@ -286,14 +307,15 @@ bool Position::check_five_in_line_side(Color side, bool allow_long_connection) c
             Pos p = POS(i, j);
             if (board[p] == side) {
                 continueCount++;
+                connectionLine[continueCount - 1] = p;
             } else {
-                check_five_helper(allow_long_connection, continueCount, fiveCount);
+                check_five_helper(allow_long_connection, continueCount, fiveCount, connectionLine);
                 continueCount = 0;
             }
             i -= 1;
             j += 1;
         }
-        check_five_helper(allow_long_connection, continueCount, fiveCount);
+        check_five_helper(allow_long_connection, continueCount, fiveCount, connectionLine);
     }
 
     std::cout << "fiveCount of " << side << " = " << fiveCount << std::endl;
@@ -305,11 +327,12 @@ bool Position::check_five_in_line_side(Color side, bool allow_long_connection) c
     return false;
 }
 
-bool Position::check_five_in_line_lastmove(bool allow_long_connection) const {
+bool Position::check_five_in_line_lastmove(bool allow_long_connection) { // const {
     if (moveCount < 5) {
         return false;
     }
-    Color lastPiece = board[historyMoves[moveCount - 1]];
+    Pos lastPos = getPosFromMove(historyMoves[moveCount - 1]);
+    Color lastPiece = board[lastPos];
     return check_five_in_line_side(lastPiece, allow_long_connection);
 }
     

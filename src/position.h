@@ -60,7 +60,7 @@ public:
 
     inline Color get_turn() { return playerToMove; }
     inline int get_move_count() { return moveCount; }
-    inline Pos* get_hist_moves() { return historyMoves; }
+    inline move_t* get_hist_moves() { return historyMoves; }
 
     void move(move_t m);
     void undo();
@@ -76,8 +76,8 @@ public:
     void gen_all_legal_moves(std::vector<move_t> &legal_moves) const;
     void compute_forbidden_moves(std::vector<move_t> &forbidden_moves) const;
 
-    bool check_five_in_line_side(Color side, bool allow_long_connection = true) const;
-    bool check_five_in_line_lastmove(bool allow_long_connection) const;
+    bool check_five_in_line_side(Color side, bool allow_long_connection = true);// const;
+    bool check_five_in_line_lastmove(bool allow_long_connection);// const;
 
     // about opening
     bool apply_openning_plaintext(str_t &opening_str);
@@ -94,8 +94,8 @@ private:
 	int boardSize;
 	int boardSizeSqr;
 	int moveCount = 0;
-	Pos historyMoves[MaxBoardSizeSqr];
-    move_t lastMove;  // last move played
+	move_t historyMoves[MaxBoardSizeSqr];
+    //move_t lastMove;  // last move played
 	Color playerToMove = BLACK;
     uint64_t key;
 
@@ -103,6 +103,10 @@ private:
 	void delPiece(Pos pos);
     bool isInBoard(Pos pos) const;
     bool isInBoardXY(int x, int y) const;
+
+    int winConnectionLen;
+    Pos winConnectionPos[32];
+    void check_five_helper(bool allow_long_connc, int &conCnt, int & fiveCnt, Pos* connectionLine);
 
 };
 
@@ -112,6 +116,9 @@ inline Color oppositeColor(Color color)
     int c = color;
     return (Color)(c ^ 0x1);  // branchless for: color == WHITE ? BLACK : WHITE
 }
+
+extern Pos getPosFromMove(move_t move);
+extern Color getColorFromMove(move_t move);
 
 extern uint64_t zobristPc[4][Position::MaxBoardSizeSqr];
 extern uint64_t zobristTurn[4];

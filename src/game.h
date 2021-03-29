@@ -66,7 +66,7 @@ public:
 
     void game_decode_state(str_t *result, str_t *reason);
     void game_export_pgn(int verbosity, str_t *out);
-    void game_export_sgf(int verbosity, str_t *out);
+    void game_export_sgf(str_t *out);
 
 private:
 

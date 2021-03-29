@@ -147,8 +147,8 @@ static void *thread_start(void *arg)
         // Write to SGF file
         if (options.sgf.len) {
             scope(str_destroy) str_t sgfText = str_init();
-            game.game_export_sgf(3, &sgfText);
-            //fputs(sgfText.buf, sgfFile);
+            game.game_export_sgf(&sgfText);
+            sgfSeqWriter.seq_writer_push(idx, sgfText);
         }
 
         // Write to stdout a one line summary of the game
