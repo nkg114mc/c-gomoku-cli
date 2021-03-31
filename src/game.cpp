@@ -527,6 +527,8 @@ void Game::game_export_pgn(int verbosity, str_t *out)
 
 void Game::game_export_sgf(str_t *out)
 {
+    const int movePerline = 8;
+
     str_cat_c(out, "(");
     str_cat_c(out, ";FF[4]GM[4]"); // common info
     
@@ -557,14 +559,24 @@ void Game::game_export_sgf(str_t *out)
     str_push(out, '\n');
 
     // Print the moves
-
-    //if (ply != ) {
-
-    //}
-
     Position* lastPos = &(pos[ply]);
+    
+    // openning moves
+    int openingMoveCnt = lastPos->get_move_count() - ply;
+
+
+    // played moves
+    int moveCnt = 0;
     move_t* histMove = lastPos->get_hist_moves();
     for (int j = 0; j < lastPos->get_move_count(); j++) {
+        int thinkPly = j - openingMoveCnt;
+        if (openingMoveCnt > 0 && thinkPly == 0) {
+            str_push(out, '\n');
+        }
+        if (moveCnt >= movePerline) {
+            str_push(out, '\n');
+            moveCnt = 0;
+        }
         str_push(out, ';');
     
         Color color = getColorFromMove(histMove[j]);
@@ -579,13 +591,20 @@ void Game::game_export_sgf(str_t *out)
         } else if (color == WHITE) {
             str_cat_fmt(out, "W[%s]", coord);
         }
+
+        if (j < openingMoveCnt) {
+            str_cat_c(out, "C[opening move]");
+        } else {
+            const int dep = this->info[thinkPly].depth;
+            const int scr = this->info[thinkPly].score;
+            const int64_t tim = info[thinkPly].time;
+            //str_cat_fmt(out, "C[%i/%i %Ims]", scr, dep, tim);
+            str_cat_fmt(out, "C[%Ims]", scr, dep, tim);
+
+            moveCnt++;
+        }
     }
 
-    //for (int i = 1; i <= this->ply; i++) {
-
-        
-
-    //}
 /*
         for (int ply = 1; ply <= ply; ply++) {
             // Write move number
