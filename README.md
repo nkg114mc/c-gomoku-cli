@@ -2,9 +2,14 @@
 
 c-gomoku-cli is a command line interface for gomoku/renju engines that support [Gomocup protocol](http://petr.lastovicka.sweb.cz/protocl2en.htm). It is a derived project from [c-chess-cli]( https://github.com/lucasart/c-chess-cli), originally authored by Lucas Braesch (lucasart).
 
+Different from computer chess community where a lot of interface tools have been developed in the passed 20 years, computer gomoku/renju is still lack of tools for engine-vs-engine matches. Most of the existing tools are GUI based, which is not suitable for distributed systems like high performance clusters. The motivation of c-gomoku-cli is to provide an open-source command line tool that can run large scale engine-vs-engine matches on multi-core workstations or cluster systems in parallel. The large-scale engine-vs-engine testing is common approach for quantifying the strength improvements of computer game engines, like chess. With this tool, engine designers can concisely measure the new engine ELO gain by letting it play with the old version for enough number of games.
+
+Instead of sticking on the C language to avoid the dependency hell in c-chess-cli, C++ is chosen to be the primary programming language in this project, because my target is to build a usable tool and C++ contains some features that can bring more convenience to achieving this target. Similar to c-chess-cli, c-gomoku-cli is primarily developed for Unix/Linux, it should work on all POSIX operating systems, including MacOS and Android. Windows is not supported so far.
+
+
 ## Compiling from the Source
 
-// TODO
+Under the root directory of project, run `cd src`, then run `make`.
 
 ## Usage
 
@@ -52,7 +57,7 @@ c-gomoku-cli -each tc=180/30 \
    * Read opening positions from `FILE`, in PLAINTEXT format. See section below about what is PLAINTEXT format.
    * `order` can be `random` or `sequential` (default value).
    * `srand` sets the seed of the random number generator to `N`. The default value `N=0` will set the seed automatically to an unpredictable number. Any non-zero number will generate a unique, reproducible random sequence.
- * `pgn FILE`: Save a dummy game to `FILE`, in PGN format. PGN format is for chess games. We replace the moves with some random chess moves but only keep the game result and player names. This dummy PGN file can be input by BaysianELO to compute ELO scores.
+ * `pgn FILE`: Save a dummy game to `FILE`, in PGN format. PGN format is for chess games. We replace the moves with some random chess moves but only keep the game result and player names. This dummy PGN file can be input by [BayesianElo](https://www.remi-coulom.fr/Bayesian-Elo/) to compute ELO scores.
  * `sgf FILE`: Save a game to `FILE`, in SGF format.
 
 ### Engine Options
@@ -65,7 +70,19 @@ c-gomoku-cli -each tc=180/30 \
 
 ### Openings File Format
 
-// TODO
+So far c-gomoku-cli only accept openings in plaintext format (`*.txt`). In a plaintext opening file, each line is an opening position. The opening position is denoted by the move sequence: `<black_move>, <black_move>, <black_move>`... . Each move is seperated with a comma "`,`" and a space "` `". The last move will not be followed by any comma or space. Each move is in format `<x-offset>,<y-offset>`, no space in between. Note that here each coordinate is the offset from the center of the board, which is different from the move coordinate of Gomocup protocol where (0,0) is up-left corner of the board. Offset value can be negative.
+Assuming that a board is in size `SIZE`, the conversion between plaintext offsets `<x-offset>,<y-offset>` and Gomocup move `<x>,<y>` is:
+```
+HALF_SIZE = floor(SIZE / 2)
+<x> = <x-offset> + HALF_SIZE
+<y> = <y-offset> + HALF_SIZE
+```
+The following is an example position in plaintext format:
+```
+8,-3, 6,-4, 5,-4, 4,-3, 2,-8, -1,-5
+```
+You can see more examples from [Gomocup 2020 result page](https://gomocup.org/results/gomocup-result-2020/) (download the results+openings from the link at the very bottom of that page).
+
 
 ## Acknowledgement
 
