@@ -126,12 +126,13 @@ static void engine_parse_cmd(const char *cmd, str_t *cwd, str_t *run, str_t **ar
         vec_push(*args, str_init_from(token), str_t);
 }
 
-void Engine::engine_init(Worker *w, const char *cmd, const char *name, const str_t *options)
+void Engine::engine_init(Worker *w, const char *cmd, const char *name, const str_t *options, bool debug)
 {
     if (!*cmd)
         DIE("[%d] missing command to start engine.\n", w->id);
 
     this->name = str_init_from_c(*name ? name : cmd); // default value
+    this->isDebug = debug;
 
     // Parse cmd into (cwd, run, args): we want to execute run from cwd with args.
     scope(str_destroy) str_t cwd = str_init(), run = str_init();
@@ -154,13 +155,14 @@ void Engine::engine_init(Worker *w, const char *cmd, const char *name, const str
 
     // parse engine ABOUT infomation
     engine_about(w);
-
+/*
     for (size_t i = 0; i < vec_size(options); i++) {
         //scope(str_destroy) str_t oname = str_init(), ovalue = str_init();
         //str_tok(str_tok(options[i].buf, &oname, "="), &ovalue, "=");
         //str_cpy_fmt(&line, "setoption name %S value %S", oname, ovalue);
         //engine_writeln(w, line.buf);
     }
+*/
 }
 
 void Engine::engine_destroy(Worker *w)
@@ -233,7 +235,6 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
     
     w->deadline_set(name.buf, turnTimeLimit + 1000);
 
-    //while (*timeLeft >= 0 && !result) {
     while ((turnTimeLeft + 1000) >= 0 && !result) {
         engine_readln(w, &line);
 
@@ -245,7 +246,9 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
         const char *tail = NULL;
 
         if ((tail = str_prefix(line.buf, "MESSAGE"))) {
-            engine_process_message_ifneeded(line.buf);
+            if (this->isDebug) {
+                engine_process_message_ifneeded(line.buf);
+            }
 
             // parse and store thing infomation to info
             engine_parse_thinking_messages(line.buf, info);
@@ -335,7 +338,6 @@ void Engine::engine_about(Worker *w) {
     w->deadline_clear();
     
     // parse about infos
-    //printf("Get Engine About:[%s]\n", line.buf);
     parse_and_display_engine_about(line);
 }
 
@@ -343,7 +345,6 @@ void Engine::engine_about(Worker *w) {
 void Engine::engine_process_message_ifneeded(const char *line)
 {
     // Isolate the first token being the command to run.
-    //scope(str_destroy) str_t token = str_init();
     const char *tail = NULL;
 
     tail = str_prefix(line, "MESSAGE");
@@ -373,39 +374,4 @@ void Engine::engine_process_message_ifneeded(const char *line)
 
 void Engine::engine_parse_thinking_messages(const char *line, Info *info)
 {
-    /*
-            while ((tail = str_tok(tail, &token, " "))) {
-                if (!strcmp(token.buf, "depth")) {
-                    if ((tail = str_tok(tail, &token, " ")))
-                        info->depth = atoi(token.buf);
-                } else if (!strcmp(token.buf, "score")) {
-                    if ((tail = str_tok(tail, &token, " "))) {
-                        if (!strcmp(token.buf, "cp") && (tail = str_tok(tail, &token, " ")))
-                            info->score = atoi(token.buf);
-                        else if (!strcmp(token.buf, "mate") && (tail = str_tok(tail, &token, " "))) {
-                            const int movesToMate = atoi(token.buf);
-                            info->score = movesToMate < 0 ? INT_MIN - movesToMate : INT_MAX - movesToMate;
-                        } else
-                            DIE("illegal syntax after 'score' in '%s'\n", line.buf);
-                    }
-                } else if (!strcmp(token.buf, "pv")) {
-                    str_cpy_c(pv, tail + strspn(tail, " "));
-                }
-            }
-    */
 }
-
-/*
-void Engine::engine_sync(Worker *w)
-{
-    w->deadline_set(name.buf, system_msec() + 2000);
-    engine_writeln(w, "isready");
-    scope(str_destroy) str_t line = str_init();
-
-    do {
-        engine_readln(w, &line);
-    } while (strcmp(line.buf, "readyok"));
-
-    w->deadline_clear();
-}
-*/

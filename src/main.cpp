@@ -38,7 +38,6 @@ static JobQueue jq;
 
 static void main_destroy(void)
 {
-    //vec_destroy_rec(Workers, worker_destroy);
     for (int i = 0; i < Workers.size(); i++) {
         Workers[i].worker_destroy();
     }
@@ -78,7 +77,6 @@ static void main_init(int argc, const char **argv)
     }
 
     // Prepare Workers[]
-
     for (int i = 0; i < options.concurrency; i++) {
         scope(str_destroy) str_t logName = str_init();
 
@@ -111,7 +109,7 @@ static void *thread_start(void *arg)
                 }
 
                 ei[i] = job.ei[i];
-                engines[i].engine_init(w, eo[ei[i]].cmd.buf, eo[ei[i]].name.buf, eo[ei[i]].options);
+                engines[i].engine_init(w, eo[ei[i]].cmd.buf, eo[ei[i]].name.buf, eo[ei[i]].options, options.debug);
                 jq.job_queue_set_name(ei[i], engines[i].name.buf);
             }
         }
@@ -185,35 +183,10 @@ static void *thread_start(void *arg)
 
     return NULL;
 }
-/*
-void test_openning() {
 
-    std::string fn = "/Users/chaom/workplace/gomokus/gomocup2020results/openings/openings_freestyle.txt";
-    openings.openings_init(fn.c_str(), false, 0, 0);
-
-    int osize = vec_size(openings.index);
-    std::cout << "openning size = " << osize << std::endl;
-
-    scope(str_destroy) str_t fen = str_init();
-    for (int i = 0; i < osize; i++) {
-        openings.openings_next(&fen, i, 0);
-        std::cout << "fen = " << fen.buf << std::endl;
-        assert(Openings::openings_validate_opening_str(fen));
-
-        Position bd(20);
-        bd.apply_openning_plaintext(fen);
-
-        bd.pos_print();
-    }
-    
-    //exit(0);
-}
-*/
 int main(int argc, const char **argv)
 {
     main_init(argc, argv);
-
-    //test_openning();
 
     // Start threads[]
     pthread_t threads[options.concurrency];

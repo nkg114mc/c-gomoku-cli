@@ -111,30 +111,6 @@ void Game::gomocup_turn_info_command(const EngineOptions *eo,
                                      Worker *w, 
                                      Engine *engine)
 {
-/*
-    str_cpy_c(cmd, "");
-
-    if (eo[ei]->nodes)
-        str_cat_fmt(cmd, " nodes %I", eo[ei]->nodes);
-
-    if (eo[ei]->depth)
-        str_cat_fmt(cmd, " depth %i", eo[ei]->depth);
-
-    if (eo[ei]->movetime)
-        str_cat_fmt(cmd, " movetime %I", eo[ei]->movetime);
-
-    if (eo[ei]->time || eo[ei]->increment) {
-        const int color = g->pos[g->ply].turn;
-
-        str_cat_fmt(cmd, " wtime %I winc %I btime %I binc %I",
-            timeLeft[ei ^ color], eo[ei ^ color]->increment,
-            timeLeft[ei ^ color ^ BLACK], eo[ei ^ color ^ BLACK]->increment);
-    }
-
-    if (eo[ei]->movestogo)
-        str_cat_fmt(cmd, " movestogo %i",
-            eo[ei]->movestogo - ((g->ply / 2) % eo[ei]->movestogo));
-*/
     scope(str_destroy) str_t cmd = str_init();
 
     str_cpy_c(&cmd, "");
@@ -203,31 +179,12 @@ void Game::send_board_command(Position *pos, Worker *w, Engine *engine)
         str_cpy_c(&cmd, "");
         str_cat_fmt(&cmd, "%i,%i,%i", x, y, gomocupColorIdx);
         engine->engine_writeln(w, cmd.buf);
-
-        //gomocupColorIdx = (gomocupColorIdx % 2 + 1);
     }
 
     engine->engine_writeln(w, "DONE");
 }
 
 void Game::compute_time_left(const EngineOptions *eo, int64_t *timeLeft) {
-/*
-    if (eo->movetime) {
-        // movetime is special: discard movestogo, time, increment
-        (*timeLeft) = eo->movetime;
-    } else if (eo->time || eo->increment) {
-        // Always apply increment (can be zero)
-        (*timeLeft) += eo->increment;
-
-        // movestogo specific clock reset event
-        if (eo->movestogo && ply > 1 && ((ply / 2) % eo->movestogo) == 0) {
-            (*timeLeft) += eo->time;
-        }
-    } else {
-        // Only depth and/or nodes limit
-        (*timeLeft) = INT64_MAX / 2;  // HACK: system_msec() + timeLeft must not overflow
-    }
-*/
     if (eo->timeoutMatch > 0) {
         // do nothing
     } else {
@@ -284,20 +241,18 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
             Position::pos_move_with_copy(&pos[ply], &pos[ply - 1], played);
         }
 
-        pos[ply].pos_print();
+        if (o->debug) {
+            pos[ply].pos_print();
+        }
 
         state = game_apply_rules(this, legalMoves, forbiddenMoves);
         if (state > STATE_NONE) {
-            pos[ply].pos_print();
+            if (o->debug) {
+                pos[ply].pos_print();
+            }
             break;
         }
-/*
-        // this should be replaced by YXBOARD
-        uci_position_command(this, &cmd); 
-        engines[ei].engine_writeln(w, cmd.buf);
-        //engines[ei].engine_sync(w);
-        engines[i].engine_wait_for_ok(w);
-*/
+
         // Prepare timeLeft[ei]
         compute_time_left(eo[ei], &(timeLeft[ei]));
 
@@ -311,7 +266,6 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
             if (o->useTURN) { // use TURN to trigger think
                 assert(ply == pos[ply].get_move_count()); // Can not do TURN when game history is unknown   
                 std::string last_move_str = pos[ply].move_to_gomostr(played);
-                printf("Get move str [%s]\n", last_move_str.c_str());
                 std::string turn_cmd = std::string("TURN ") + last_move_str;
                 char tmp[32];
                 strcpy(tmp, turn_cmd.c_str());
@@ -461,54 +415,6 @@ void Game::game_export_pgn(int verbosity, str_t *out)
     if (verbosity > 0) {
         // Print the moves
         str_push(out, '\n');
-/*
-        const int pliesPerLine = verbosity == 2 ? 6
-            : verbosity == 3 ? 5
-            : 16;
-
-        for (int ply = 1; ply <= ply; ply++) {
-            // Write move number
-            if (pos[ply - 1].turn == WHITE || ply == 1)
-                str_cat_fmt(out, pos[ply - 1].turn == WHITE ? "%i. " : "%i... ",
-                    pos[ply - 1].fullMove);
-
-            // Append SAN move
-            pos_move_to_san(&pos[ply - 1], pos[ply].lastMove, &san);
-            str_cat(out, san);
-
-            // Append check marker
-            if (pos[ply].checkers) {
-                if (ply == ply && state == STATE_CHECKMATE)
-                    str_push(out, '#');  // checkmate
-                else
-                    str_push(out, '+');  // normal check
-            }
-
-            // Write PGN comment
-            const int depth = info[ply - 1].depth, score = info[ply - 1].score;
-
-            if (verbosity == 2) {
-                if (score > INT_MAX / 2)
-                    str_cat_fmt(out, " {M%i/%i}", INT_MAX - score, depth);
-                else if (score < INT_MIN / 2)
-                    str_cat_fmt(out, " {-M%i/%i}", score - INT_MIN, depth);
-                else
-                    str_cat_fmt(out, " {%i/%i}", score, depth);
-            } else if (verbosity == 3) {
-                const int64_t time = info[ply - 1].time;
-
-                if (score > INT_MAX / 2)
-                    str_cat_fmt(out, " {M%i/%i %Ims}", INT_MAX - score, depth, time);
-                else if (score < INT_MIN / 2)
-                    str_cat_fmt(out, " {-M%i/%i %Ims}", score - INT_MIN, depth, time);
-                else
-                    str_cat_fmt(out, " {%i/%i %Ims}", score, depth, time);
-            }
-
-            // Append delimiter
-            str_push(out, ply % pliesPerLine == 0 ? '\n' : ' ');
-        }
-*/
 
         const std::string dummyMovesStr1 = "1. d4 Nf6 2. c4 e6 3. Nf3 d5 4. Nc3 Bb4";
         const std::string dummyMovesStr2 = "1. d4 Nf6 2. c4 e6 3. Nf3 d5 4. Nc3 Bb4 5. Bg5";
@@ -597,113 +503,13 @@ void Game::game_export_sgf(str_t *out)
         } else {
             const int dep = this->info[thinkPly].depth;
             const int scr = this->info[thinkPly].score;
-            const int64_t tim = info[thinkPly].time;
+            const int64_t tim = this->info[thinkPly].time;
             //str_cat_fmt(out, "C[%i/%i %Ims]", scr, dep, tim);
-            str_cat_fmt(out, "C[%Ims]", scr, dep, tim);
+            str_cat_fmt(out, "C[%Ims]", tim);
 
             moveCnt++;
         }
     }
 
-/*
-        for (int ply = 1; ply <= ply; ply++) {
-            // Write move number
-            if (pos[ply - 1].turn == WHITE || ply == 1)
-                str_cat_fmt(out, pos[ply - 1].turn == WHITE ? "%i. " : "%i... ",
-                    pos[ply - 1].fullMove);
-
-            // Append SAN move
-            pos_move_to_san(&pos[ply - 1], pos[ply].lastMove, &san);
-            str_cat(out, san);
-
-            // Append check marker
-            if (pos[ply].checkers) {
-                if (ply == ply && state == STATE_CHECKMATE)
-                    str_push(out, '#');  // checkmate
-                else
-                    str_push(out, '+');  // normal check
-            }
-
-            // Write PGN comment
-            const int depth = info[ply - 1].depth, score = info[ply - 1].score;
-
-            if (verbosity == 2) {
-                if (score > INT_MAX / 2)
-                    str_cat_fmt(out, " {M%i/%i}", INT_MAX - score, depth);
-                else if (score < INT_MIN / 2)
-                    str_cat_fmt(out, " {-M%i/%i}", score - INT_MIN, depth);
-                else
-                    str_cat_fmt(out, " {%i/%i}", score, depth);
-            } else if (verbosity == 3) {
-                const int64_t time = info[ply - 1].time;
-
-                if (score > INT_MAX / 2)
-                    str_cat_fmt(out, " {M%i/%i %Ims}", INT_MAX - score, depth, time);
-                else if (score < INT_MIN / 2)
-                    str_cat_fmt(out, " {-M%i/%i %Ims}", score - INT_MIN, depth, time);
-                else
-                    str_cat_fmt(out, " {%i/%i %Ims}", score, depth, time);
-            }
-
-            // Append delimiter
-            str_push(out, ply % pliesPerLine == 0 ? '\n' : ' ');
-        }
-
-
-        const std::string dummyMovesStr1 = "1. d4 Nf6 2. c4 e6 3. Nf3 d5 4. Nc3 Bb4";
-        const std::string dummyMovesStr2 = "1. d4 Nf6 2. c4 e6 3. Nf3 d5 4. Nc3 Bb4 5. Bg5";
-        
-        std::string dummyMoves = "";
-        if ((this->ply) % 2 == 0) {
-            dummyMoves = dummyMovesStr1;
-        } else {
-            dummyMoves = dummyMovesStr2;
-        }
-        str_cat_fmt(out, "%s ", dummyMoves.c_str());
-    }
-*/
     str_cat_c(out, ")\n\n");
 }
-
-/*
-static Position resolve_pv(const Worker *w, const Game *g, const char *pv)
-{
-    scope(str_destroy) str_t token = str_init();
-    const char *tail = pv;
-
-    // Start with current position. We can't guarantee that the resolved position won't be in check,
-    // but a valid one must be returned.
-    Position resolved = g->pos[g->ply];
-
-    Position p[2];
-    p[0] = resolved;
-    int idx = 0;
-    move_t *moves = vec_init_reserve(64, move_t);
-
-    while ((tail = str_tok(tail, &token, " "))) {
-        const move_t m = pos_lan_to_move(&p[idx], token.buf);
-        moves = gen_all_moves(&p[idx], moves);
-
-        if (illegal_move(m, moves)) {
-            printf("[%d] WARNING: Illegal move in PV '%s%s' from %s\n", w->id, token.buf, tail,
-                g->names[g->pos[g->ply].turn].buf);
-
-            if (w->log)
-                DIE_IF(w->id, fprintf(w->log, "WARNING: illegal move in PV '%s%s'\n", token.buf,
-                    tail) < 0);
-
-            break;
-        }
-
-        pos_move(&p[(idx + 1) % 2], &p[idx], m);
-        idx = (idx + 1) % 2;
-
-        if (!p[idx].checkers)
-            resolved = p[idx];
-    }
-
-    vec_destroy(moves);
-    return resolved;
-}
-*/
-

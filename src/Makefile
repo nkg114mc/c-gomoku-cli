@@ -1,6 +1,6 @@
 CC=g++
-CXXFLAGS+= -g -DDEBUG
-#CXXFLAGS+= -DNDEBUG
+#CXXFLAGS+= -g -DDEBUG
+CXXFLAGS+= -DNDEBUG
 CXXFLAGS+= -std=c++17 -O3 -finline-functions -funroll-all-loops -fno-rtti -msse4.2 -pthread -lm -m64 -DIS_64BIT -flto -Wall -Wcast-qual -pedantic -Wextra -Wshadow -fstrict-aliasing
 
 

@@ -192,10 +192,7 @@ bool Position::is_legal_move(move_t move) const {
 
     if (isInBoard(movePos)) {
         if (board[movePos] == EMPTY) {
-            //if (moveSide = playerToMove) {
-                // ok
-                return true;
-            //}
+            return true;
         }
     }
 
@@ -208,7 +205,6 @@ bool Position::is_legal_move(move_t move) const {
 void Position::compute_forbidden_moves(std::vector<move_t> &forbidden_moves) const {
     // TODO: implement this funciton
     // do nothing so far
-
 }
 
 void Position::check_five_helper(bool allow_long_connc, int &conCnt, int & fiveCnt, Pos* connectionLine) {
@@ -236,10 +232,6 @@ void Position::check_five_helper(bool allow_long_connc, int &conCnt, int & fiveC
 // if allow_long_connection, return true if and only if n == 5
 bool Position::check_five_in_line_side(Color side, bool allow_long_connection) { // const {
     assert(side == WHITE || side == BLACK);
-
-    //if (moveCount >= 10) {
-    //    return true;
-    //}
 
     int i, j, k;
     int fiveCount = 0;
@@ -317,8 +309,6 @@ bool Position::check_five_in_line_side(Color side, bool allow_long_connection) {
         }
         check_five_helper(allow_long_connection, continueCount, fiveCount, connectionLine);
     }
-
-    std::cout << "fiveCount of " << side << " = " << fiveCount << std::endl;
 
     assert(fiveCount <= 1);
     if (fiveCount > 0) {
@@ -501,94 +491,6 @@ uint64_t get_rnd64() {
   return r;
 }
 
-void check_one_step(Position &pos, int x, int y, int longResult, int exactResult) {
-    pos.move(buildMove(x, y, pos.get_turn()));
-    assert(pos.check_five_in_line_lastmove(true) == ((bool)longResult));
-    assert(pos.check_five_in_line_lastmove(false) == ((bool)exactResult));
-}
-
-void test_five_connect1() {
-    Position pos(15);
-
-    int testCases[][4] = {
-        {7, 7, 0, 0},  
-        {0, 0, 0, 0},
-        {6, 7, 0, 0},
-        {0, 1, 0, 0},
-        {5, 7, 0, 0},
-        {9, 9, 0, 0},
-        {8, 7, 0, 0},
-        {11,12, 0, 0},
-        {9, 7, 1, 1}
-    };
-
-    for (int i = 0; i < 9; i++) {
-        check_one_step(pos, testCases[i][0],testCases[i][1],testCases[i][2],testCases[i][3]);
-    }
-}
-
-void test_five_connect2() {
-    Position pos(15);
-
-    int testCases[][4] = {
-        {7, 7, 0, 0},
-        {0, 0, 0, 0},
-        {14, 14, 0, 0},
-        {0, 1, 0, 0},
-        {5, 7, 0, 0},
-        {0, 2, 0, 0},
-        {8, 7, 0, 0},
-        {0, 4, 0, 0},
-        {9, 7, 0, 0},
-        {0, 3, 1, 1}
-    };
-
-    for (int i = 0; i < 10; i++) {
-        check_one_step(pos, testCases[i][0],testCases[i][1],testCases[i][2],testCases[i][3]);
-    }
-}
-
-void test_five_connect3() {
-    Position pos(15);
-
-    int testCases[][4] = {
-        {0, 0, 0, 0},  
-        {0, 2, 0, 0},
-        {2, 2, 0, 0},
-        {0, 1, 0, 0},
-        {1, 1, 0, 0},
-        {9, 9, 0, 0},
-        {4, 4, 0, 0},
-        {11,12, 0, 0},
-        {3, 3, 1, 1}
-    };
-
-    for (int i = 0; i < 9; i++) {
-        check_one_step(pos, testCases[i][0],testCases[i][1],testCases[i][2],testCases[i][3]);
-    }
-}
-
-void test_five_connect4() {
-    Position pos(15);
-
-    int testCases[][4] = {
-        {0, 13, 0, 0},  
-        {0, 2, 0, 0},
-        {1, 12, 0, 0},
-        {9, 1, 0, 0},
-        {2, 11, 0, 0},
-        {10, 13, 0, 0},
-        {4, 9, 0, 0},
-        {11,12, 0, 0},
-        {3, 10, 1, 1}
-    };
-
-    for (int i = 0; i < 9; i++) {
-        check_one_step(pos, testCases[i][0],testCases[i][1],testCases[i][2],testCases[i][3]);
-    }
-}
-
-
 void initZobrish() {
     for (int i = 0; i < Position::MaxBoardSizeSqr; i++) {
         for (int j = 0; j < 4; j++) {
@@ -603,12 +505,4 @@ void initZobrish() {
     zobristTurn[BLACK] = 0;
     zobristTurn[WHITE] = get_rnd64();
     zobristTurn[WALL]  = 0;
-
-    test_five_connect1();
-    test_five_connect2();
-    test_five_connect3();
-    test_five_connect4();
-
-    printf("Ok.\n");
-    //exit(-1);
 }

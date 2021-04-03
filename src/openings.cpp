@@ -85,7 +85,6 @@ void Openings::openings_next(str_t *fen, size_t idx, int threadId)
     DIE_IF(threadId, !str_getline(&line, file));
     pthread_mutex_unlock(&mtx);
 
-    //str_tok(line.buf, fen, ";");
     str_cpy(fen, line);
 
     assert(openings_validate_opening_str(*fen));

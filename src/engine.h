@@ -35,9 +35,10 @@ public:
     FILE *in, *out;
     str_t name;
     pid_t pid;
+    bool isDebug;
     char pad[3];
 
-    void engine_init(Worker *w, const char *cmd, const char *name, const str_t *options);
+    void engine_init(Worker *w, const char *cmd, const char *name, const str_t *options, bool debug);
     void engine_destroy(Worker *w);
 
     void engine_readln(const Worker *w, str_t *line);

@@ -24,34 +24,6 @@
 #include "vec.h"
 
 
-/*
-// Parse time control. Expects 'mtg/time+inc' or 'time+inc'. Note that time and inc are provided by
-// the user in seconds, instead of msec.
-static void options_parse_tc(const char *s, EngineOptions *eo)
-{
-    double time = 0, increment = 0;
-
-    // s = left+increment
-    scope(str_destroy) str_t left = str_init(), right = str_init();
-    str_tok(str_tok(s, &left, "+"), &right, "+");
-    increment = atof(right.buf);
-
-    // parse left
-    if (strchr(left.buf, '/')) {
-        // left = movestogo/time
-        scope(str_destroy) str_t copy = str_init_from(left);
-        str_tok(str_tok(copy.buf, &left, "/"), &right, "/");
-        eo->movestogo = atoi(left.buf);
-        time = atof(right.buf);
-    } else
-        // left = time
-        time = atof(left.buf);
-
-    eo->time = (int64_t)(time * 1000);
-    eo->increment = (int64_t)(increment * 1000);
-}
-*/
-
 // Gomocup time control is in format 'matchtime|turntime' or only 'matchtime'
 static void options_parse_tc_gomocup(const char *s, EngineOptions *eo)
 {
@@ -335,32 +307,6 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
 
     if (vec_size(*eo) > 2 && o->sprt)
         DIE("only 2 engines for SPRT\n");
-    
-/*
-    o->rounds = 1;
-    o->log = true;
-    //o->boardSize = 12;
-    o->gameRule = 0;
-    str_cpy_c(&(o->pgn), "tmp.pgn");
-
-    EngineOptions engine1 = engine_options_init();
-    str_cpy_c(&engine1.cmd, "./exmple-engine/pbrain-rapfi1");
-    //str_cpy_c(&engine1.cmd, "./exmple-engine/pbrain-wine");
-    str_cpy_c(&engine1.name, "Rapfi");
-    //engine1.maxMemory = 100 * 1000 * 1000;
-    engine1.timeoutMatch = 180 * 1000;
-    engine1.timeoutTurn = 10 * 1000;
-    vec_push(*eo, engine1, EngineOptions);
-
-    EngineOptions engine2 = engine_options_init();
-    //str_cpy_c(&engine2.cmd, "./exmple-engine/pbrain-wine");
-    str_cpy_c(&engine2.cmd, "./exmple-engine/pbrain-rapfi1");
-    str_cpy_c(&engine2.name, "Wine");
-    engine2.maxMemory = 100 * 1000 * 1000;
-    engine2.timeoutMatch = 180 * 1000;
-    engine2.timeoutTurn = 10 * 1000;
-    vec_push(*eo, engine2, EngineOptions);
-*/
 
     options_print(o, eo);
 }
@@ -369,7 +315,7 @@ void options_print(Options *o, EngineOptions **eo) {
 
     std::cout << "---------------------------" << std::endl;
     std::cout << "Global Options:" << std::endl;
-    std::cout << "openingss = " << o->openings.buf << std::endl;
+    std::cout << "openings = " << o->openings.buf << std::endl;
     std::cout << "boardSize = " << o->boardSize << std::endl;
     std::cout << "gameRule = " << o->gameRule << std::endl;
     std::cout << "pgn = " << o->pgn.buf << std::endl;
