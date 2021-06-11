@@ -15,10 +15,13 @@
  */
 
 #pragma once
+#ifndef __MINGW32__
+    #include <sys/types.h>
+#endif
+
 #include <cinttypes>
 #include <cstdbool>
 #include <cstdio>
-#include <sys/types.h>
 #include "str.h"
 #include "workers.h"
 
@@ -31,10 +34,15 @@ struct Info {
 // Engine process
 class Engine {
 public:
+#ifdef __MINGW32__
+    long  pid;
+    void* hProcess;
+#else
+    pid_t pid;
+#endif
 
     FILE *in, *out;
     str_t name;
-    pid_t pid;
     bool isDebug;
     char pad[3];
 
