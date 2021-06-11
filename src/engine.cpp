@@ -61,6 +61,20 @@ static void engine_spawn(const Worker *w, Engine *e,
     // Pipe handler: read=0, write=1
     HANDLE p_stdin[2], p_stdout[2];
 
+    // Setup job handler and job info
+    HANDLE hJob = CreateJobObject(NULL, NULL);
+    DIE_IF(w->id, !hJob);
+
+    JOBOBJECT_BASIC_LIMIT_INFORMATION jobBasicInfo;
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION jobExtendedInfo;
+    ZeroMemory(&jobBasicInfo, sizeof(JOBOBJECT_BASIC_LIMIT_INFORMATION));
+    ZeroMemory(&jobExtendedInfo, sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
+
+    jobBasicInfo.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    jobExtendedInfo.BasicLimitInformation = jobBasicInfo;
+    DIE_IF(w->id, !SetInformationJobObject(hJob, JobObjectExtendedLimitInformation, 
+        &jobExtendedInfo, sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION)));
+
     // Create a pipe for child process's STDOUT
     DIE_IF(w->id, !CreatePipe(&p_stdout[0], &p_stdout[1], &saAttr, 0));
     DIE_IF(w->id, !SetHandleInformation(p_stdout[0], HANDLE_FLAG_INHERIT, 0));
@@ -73,7 +87,7 @@ static void engine_spawn(const Worker *w, Engine *e,
     PROCESS_INFORMATION piProcInfo; 
     STARTUPINFO siStartInfo;
     ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
-    ZeroMemory( &siStartInfo, sizeof(STARTUPINFO) );
+    ZeroMemory(&siStartInfo, sizeof(STARTUPINFO));
     siStartInfo.cb = sizeof(STARTUPINFO); 
     siStartInfo.hStdOutput = p_stdout[1];
     siStartInfo.hStdInput = p_stdin[0];
@@ -84,7 +98,6 @@ static void engine_spawn(const Worker *w, Engine *e,
     char fullcmd[32768];
     strcpy_s(fullcmd, cmd);
     const int flag = CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS;
-
 
     if (!CreateProcess(
         NULL,           // application name
@@ -117,6 +130,11 @@ static void engine_spawn(const Worker *w, Engine *e,
     DIE_IF(w->id, stdout_fd == -1);
     DIE_IF(w->id, !(e->in = _fdopen(stdout_fd, "r")));
     DIE_IF(w->id, !(e->out = _fdopen(stdin_fd, "w")));
+
+    // Bind child process and parent process to one job, so child process is
+    // killed when parent process exits
+    DIE_IF(w->id, !AssignProcessToJobObject(hJob, GetCurrentProcess()));
+    DIE_IF(w->id, !AssignProcessToJobObject(hJob, e->hProcess));
 #else
     // Pipe diagram: Parent -> [1]into[0] -> Child -> [1]outof[0] -> Parent
     // 'into' and 'outof' are pipes, each with 2 ends: read=0, write=1
