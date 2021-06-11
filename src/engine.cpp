@@ -14,17 +14,24 @@
  *  not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifdef __linux__
+#if defined(__MINGW32__)
+    #include <io.h>
+    #include <fcntl.h>
+    #include <windows.h> 
+#elif defined(__linux__)
     #define _GNU_SOURCE
     #include <unistd.h>
     #include <fcntl.h>
     #include <sys/prctl.h>
+    #include <sys/wait.h>
 #else
     #include <unistd.h>
+    #include <sys/wait.h>
 #endif
 
 #include <iostream>
 #include <sstream>
+#include <filesystem>
 #include <assert.h>
 #include <limits.h>
 #include <pthread.h>
@@ -32,18 +39,103 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/wait.h>
 
 #include "engine.h"
 #include "util.h"
 #include "vec.h"
 #include "position.h"
 
-static void engine_spawn(const Worker *w, Engine *e, const char *cwd, const char *run, char **argv,
+static void engine_spawn(const Worker *w, Engine *e, 
+    [[maybe_unused]] const char *cmd, const char *cwd, 
+    [[maybe_unused]] const char *run, [[maybe_unused]] char **argv, 
     bool readStdErr)
 {
     assert(argv[0]);
 
+#if defined(__MINGW32__)
+    SECURITY_ATTRIBUTES saAttr;
+    saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+    saAttr.bInheritHandle = TRUE;
+    saAttr.lpSecurityDescriptor = NULL;
+
+    // Pipe handler: read=0, write=1
+    HANDLE p_stdin[2], p_stdout[2];
+
+    // Setup job handler and job info
+    HANDLE hJob = CreateJobObject(NULL, NULL);
+    DIE_IF(w->id, !hJob);
+
+    JOBOBJECT_BASIC_LIMIT_INFORMATION jobBasicInfo;
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION jobExtendedInfo;
+    ZeroMemory(&jobBasicInfo, sizeof(JOBOBJECT_BASIC_LIMIT_INFORMATION));
+    ZeroMemory(&jobExtendedInfo, sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
+
+    jobBasicInfo.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    jobExtendedInfo.BasicLimitInformation = jobBasicInfo;
+    DIE_IF(w->id, !SetInformationJobObject(hJob, JobObjectExtendedLimitInformation, 
+        &jobExtendedInfo, sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION)));
+
+    // Create a pipe for child process's STDOUT
+    DIE_IF(w->id, !CreatePipe(&p_stdout[0], &p_stdout[1], &saAttr, 0));
+    DIE_IF(w->id, !SetHandleInformation(p_stdout[0], HANDLE_FLAG_INHERIT, 0));
+
+    // Create a pipe for child process's STDIN
+    DIE_IF(w->id, !CreatePipe(&p_stdin[0], &p_stdin[1], &saAttr, 0));
+    DIE_IF(w->id, !SetHandleInformation(p_stdin[1], HANDLE_FLAG_INHERIT, 0));
+
+    // Create the child process
+    PROCESS_INFORMATION piProcInfo; 
+    STARTUPINFO siStartInfo;
+    ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
+    ZeroMemory(&siStartInfo, sizeof(STARTUPINFO));
+    siStartInfo.cb = sizeof(STARTUPINFO); 
+    siStartInfo.hStdOutput = p_stdout[1];
+    siStartInfo.hStdInput = p_stdin[0];
+    if (readStdErr)
+        siStartInfo.hStdError = p_stdout[1];
+    siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
+
+    char fullcmd[32768];
+    strcpy_s(fullcmd, cmd);
+    const int flag = CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS;
+
+    if (!CreateProcess(
+        NULL,           // application name
+        fullcmd,        // command line (non-const)
+        NULL,           // process security attributes
+        NULL,           // primary thread security attributes
+        TRUE,           // handles are inherited
+        flag,           // creation flags
+        NULL,           // use parent's environment
+        cwd,            // child process's current directory
+        &siStartInfo,   // STARTUPINFO pointer
+        &piProcInfo     // receives PROCESS_INFORMATION
+    ))
+        DIE("fail to execute engine cmdline %s\n", cmd);
+
+    // Keep the handle to the child process
+    e->pid = piProcInfo.dwProcessId;
+    e->hProcess = piProcInfo.hProcess;
+    // Close the handle to the child's primary thread
+    DIE_IF(w->id, !CloseHandle(piProcInfo.hThread));
+
+    // Close handles to the stdin and stdout pipes no longer needed
+    DIE_IF(w->id, !CloseHandle(p_stdin[0]));
+    DIE_IF(w->id, !CloseHandle(p_stdout[1]));
+
+    // Reopen stdin and stdout pipes using C style FILE
+    int stdin_fd = _open_osfhandle((intptr_t)p_stdin[1], _O_RDONLY | _O_TEXT);
+    int stdout_fd = _open_osfhandle((intptr_t)p_stdout[0], _O_RDONLY | _O_TEXT);
+    DIE_IF(w->id, stdin_fd == -1);
+    DIE_IF(w->id, stdout_fd == -1);
+    DIE_IF(w->id, !(e->in = _fdopen(stdout_fd, "r")));
+    DIE_IF(w->id, !(e->out = _fdopen(stdin_fd, "w")));
+
+    // Bind child process and parent process to one job, so child process is
+    // killed when parent process exits
+    DIE_IF(w->id, !AssignProcessToJobObject(hJob, GetCurrentProcess()));
+    DIE_IF(w->id, !AssignProcessToJobObject(hJob, e->hProcess));
+#else
     // Pipe diagram: Parent -> [1]into[0] -> Child -> [1]outof[0] -> Parent
     // 'into' and 'outof' are pipes, each with 2 ends: read=0, write=1
     int outof[2] = {0}, into[2] = {0};
@@ -96,6 +188,7 @@ static void engine_spawn(const Worker *w, Engine *e, const char *cwd, const char
         DIE_IF(w->id, !(e->in = fdopen(outof[0], "r")));
         DIE_IF(w->id, !(e->out = fdopen(into[1], "w")));
     }
+#endif
 }
 
 static void engine_parse_cmd(const char *cmd, str_t *cwd, str_t *run, str_t **args)
@@ -126,12 +219,13 @@ static void engine_parse_cmd(const char *cmd, str_t *cwd, str_t *run, str_t **ar
         vec_push(*args, str_init_from(token), str_t);
 }
 
-void Engine::engine_init(Worker *w, const char *cmd, const char *name, const str_t *options, bool debug)
+void Engine::engine_init(Worker *w, const char *cmd, const char *engname, 
+    [[maybe_unused]] const str_t *options, bool debug)
 {
     if (!*cmd)
         DIE("[%d] missing command to start engine.\n", w->id);
 
-    this->name = str_init_from_c(*name ? name : cmd); // default value
+    this->name = str_init_from_c(*engname ? engname : cmd); // default value
     this->isDebug = debug;
 
     // Parse cmd into (cwd, run, args): we want to execute run from cwd with args.
@@ -148,7 +242,7 @@ void Engine::engine_init(Worker *w, const char *cmd, const char *name, const str
     }
 
     // Spawn child process and plug pipes
-    engine_spawn(w, this, cwd.buf, run.buf, argv, w->log != NULL);
+    engine_spawn(w, this, cmd, cwd.buf, run.buf, argv, w->log != NULL);
 
     vec_destroy_rec(args, str_destroy);
     free(argv);
@@ -175,7 +269,14 @@ void Engine::engine_destroy(Worker *w)
     // Order the engine to quit, and grant 1s deadline for obeying
     w->deadline_set(name.buf, system_msec() + 1000);
     engine_writeln(w, "END");
+
+#ifdef __MINGW32__
+    WaitForSingleObject((HANDLE)hProcess, INFINITE);
+    CloseHandle((HANDLE)hProcess);
+#else
     waitpid(pid, NULL, 0);
+#endif
+
     w->deadline_clear();
 
     str_destroy(&name);
@@ -192,7 +293,7 @@ void Engine::engine_readln(const Worker *w, str_t *line)
         DIE_IF(w->id, fprintf(w->log, "%s -> %s\n", name.buf, line->buf) < 0);
 }
 
-void Engine::engine_writeln(const Worker *w, char *buf)
+void Engine::engine_writeln(const Worker *w, const char *buf)
 {
     DIE_IF(w->id, fputs(buf, out) < 0);
     DIE_IF(w->id, fputc('\n', out) < 0);
@@ -278,7 +379,7 @@ static void parse_and_display_engine_about(str_t &line) {
     int flag = 0;
     std::vector<std::string> tokens;
     std::stringstream ss;
-    for (int i = 0; i < line.len; i++) {
+    for (size_t i = 0; i < line.len; i++) {
         char ch = line.buf[i];
         if (ch == '\"') {
             flag = (flag + 1) % 2;
@@ -304,7 +405,7 @@ static void parse_and_display_engine_about(str_t &line) {
     std::string author = "?";
     std::string version = "?";
     std::string country = "?";
-    for (int i = 0; i < tokens.size(); i++) {
+    for (size_t i = 0; i < tokens.size(); i++) {
         if (tokens[i] == "name") {
             if ((i + 1) < tokens.size()) {
                 name = tokens[i + 1];
@@ -372,6 +473,6 @@ void Engine::engine_process_message_ifneeded(const char *line)
     }
 }
 
-void Engine::engine_parse_thinking_messages(const char *line, Info *info)
+void Engine::engine_parse_thinking_messages([[maybe_unused]] const char *line, [[maybe_unused]] Info *info)
 {
 }

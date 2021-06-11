@@ -27,7 +27,7 @@ void Openings::openings_init(const char *fileName, bool random, uint64_t srand, 
     index = (long*) vec_init(size_t);
 
     if (*fileName) {
-        DIE_IF(threadId, !(file = fopen(fileName, "re")));
+        DIE_IF(threadId, !(file = fopen(fileName, FOPEN_READ_MODE)));
     }
 
     if (file) {

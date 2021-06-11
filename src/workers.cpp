@@ -61,7 +61,7 @@ void Worker::worker_init(int i, const char *logName)
 
     log = NULL;
     if (*logName) {
-        log = fopen(logName, "we");
+        log = fopen(logName, FOPEN_WRITE_MODE);
         DIE_IF(0, !log);
     }
 

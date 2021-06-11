@@ -69,11 +69,11 @@ static void main_init(int argc, const char **argv)
     openings.openings_init(options.openings.buf, options.random, options.srand, 0);
 
     if (options.pgn.len) {
-        pgnSeqWriter.seq_writer_init(options.pgn.buf, "ae");
+        pgnSeqWriter.seq_writer_init(options.pgn.buf, FOPEN_APPEND_MODE);
     }
 
     if (options.sgf.len) {
-        sgfSeqWriter.seq_writer_init(options.sgf.buf, "ae");
+        sgfSeqWriter.seq_writer_init(options.sgf.buf, FOPEN_APPEND_MODE);
     }
 
     // Prepare Workers[]
