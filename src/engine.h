@@ -42,7 +42,7 @@ public:
     void engine_destroy(Worker *w);
 
     void engine_readln(const Worker *w, str_t *line);
-    void engine_writeln(const Worker *w, char *buf);
+    void engine_writeln(const Worker *w, const char *buf);
 
     void engine_sync(Worker *w);
     void engine_wait_for_ok(Worker *w);

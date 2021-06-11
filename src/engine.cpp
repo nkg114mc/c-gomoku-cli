@@ -126,12 +126,12 @@ static void engine_parse_cmd(const char *cmd, str_t *cwd, str_t *run, str_t **ar
         vec_push(*args, str_init_from(token), str_t);
 }
 
-void Engine::engine_init(Worker *w, const char *cmd, const char *name, const str_t *options, bool debug)
+void Engine::engine_init(Worker *w, const char *cmd, const char *engname, const str_t *options, bool debug)
 {
     if (!*cmd)
         DIE("[%d] missing command to start engine.\n", w->id);
 
-    this->name = str_init_from_c(*name ? name : cmd); // default value
+    this->name = str_init_from_c(*engname ? engname : cmd); // default value
     this->isDebug = debug;
 
     // Parse cmd into (cwd, run, args): we want to execute run from cwd with args.
@@ -192,7 +192,7 @@ void Engine::engine_readln(const Worker *w, str_t *line)
         DIE_IF(w->id, fprintf(w->log, "%s -> %s\n", name.buf, line->buf) < 0);
 }
 
-void Engine::engine_writeln(const Worker *w, char *buf)
+void Engine::engine_writeln(const Worker *w, const char *buf)
 {
     DIE_IF(w->id, fputs(buf, out) < 0);
     DIE_IF(w->id, fputc('\n', out) < 0);
@@ -278,7 +278,7 @@ static void parse_and_display_engine_about(str_t &line) {
     int flag = 0;
     std::vector<std::string> tokens;
     std::stringstream ss;
-    for (int i = 0; i < line.len; i++) {
+    for (size_t i = 0; i < line.len; i++) {
         char ch = line.buf[i];
         if (ch == '\"') {
             flag = (flag + 1) % 2;
@@ -304,7 +304,7 @@ static void parse_and_display_engine_about(str_t &line) {
     std::string author = "?";
     std::string version = "?";
     std::string country = "?";
-    for (int i = 0; i < tokens.size(); i++) {
+    for (size_t i = 0; i < tokens.size(); i++) {
         if (tokens[i] == "name") {
             if ((i + 1) < tokens.size()) {
                 name = tokens[i + 1];
