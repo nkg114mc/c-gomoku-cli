@@ -47,3 +47,13 @@ void system_sleep(int64_t msec);
     if (v) \
         die_errno(id, __FILE__, __LINE__); \
 })
+
+#ifdef __linux__
+    #define FOPEN_READ_MODE "re"
+    #define FOPEN_WRITE_MODE "we"
+    #define FOPEN_APPEND_MODE "ae"
+#else
+    #define FOPEN_READ_MODE "r"
+    #define FOPEN_WRITE_MODE "w"
+    #define FOPEN_APPEND_MODE "a"
+#endif
