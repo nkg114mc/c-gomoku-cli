@@ -63,15 +63,31 @@ c-gomoku-cli -each tc=180/30 \
 ### Engine Options
 
  * `cmd=COMMAND`: Set the command to run the engine.
+   
    * The current working directory will be set automatically, if a `/` is contained in `COMMAND`. For example, `cmd=../Engines/Wine2.0`, will run `./Wine2.0` from `../Engines`. If no `/` is found, the command is executed as is. Without `/`, for example `cmd= demoengine` will run `demoengine`, which only works if ` demoengine` command was in `PATH`.
    * Arguments can be provided as part of the command. For example `"cmd=../fooEngine -foo=1"`. Note that the `""` are needed here, for the command line interpreter to parse the whole string as a single token.
+   
  * `name=NAME`: Set the engine's name. If omitted, the name will be taken from the `ABOUT` values sent by the engine.
- * `tc=TIMECONTROL`: Set the time control to `TIMECONTROL`. The format is `match_time/turn_time` or `match_time`, where ` match_time` is the total time of this match (in seconds), ` turn_time` is the max time limit per move (in seconds). If ` turn_time` is omitted, then it will be the same with `match_time` by default.
+
+ * `tc=TIMECONTROL`: Set the time control to `TIMECONTROL`. The format is `match_time/turn_time+increment` or `match_time`, where ` match_time` is the total time of this match (in seconds), ` turn_time` is the max time limit per move (in seconds), and `increment` is time increment per move (in seconds). If ` turn_time` is omitted, then it will be the same with `match_time` by default. If `increment` is omitted, then it will be set to `0` by default. If `match_time` is `0`, then there will no limit on match time and `turn_time` will be the only limitation.
+
+ * `depth=N`: Depth limit per move. This is an extension option[^1], may not be supported by all engines.
+
+ * `nodes=N`: Node limit per move (`N` is recommended to be have a granularity more than `1000`). This is an extension option[^1], may not be supported by all engines.
+
+ * `maxmemory=MAXMEMORY`: Set the max memory to `MAXMEMORY` bytes. Default memory limit is 350MB (same as Gomocup) if omitted.
+
+ * `thread=N`: Number of threads a engine can use. Default value is `1`. This is an extension option[^1], may not be supported by all engines.
+
+ * `option.O=V`: Set a raw protocol info. Command `INFO [O] [V]` will be sent to the engine before each game starts.
+
+   [^1]: Yixin-Board extension protocol: https://github.com/accreator/Yixin-protocol/blob/master/protocol.pdf
 
 ### Openings File Format
 
 So far c-gomoku-cli only accept openings in plaintext format (`*.txt`). In a plaintext opening file, each line is an opening position. The opening position is denoted by the move sequence: `<black_move>, <black_move>, <black_move>`... . Each move is seperated with a comma "`,`" and a space "` `". The last move will not be followed by any comma or space. Each move is in format `<x-offset>,<y-offset>`, no space in between. Note that here each coordinate is the offset from the center of the board, which is different from the move coordinate of Gomocup protocol where (0,0) is up-left corner of the board. Offset value can be negative.
 Assuming that a board is in size `SIZE`, the conversion between plaintext offsets `<x-offset>,<y-offset>` and Gomocup move `<x>,<y>` is:
+
 ```
 HALF_SIZE = floor(SIZE / 2)
 <x> = <x-offset> + HALF_SIZE

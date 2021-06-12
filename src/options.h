@@ -37,9 +37,9 @@ typedef struct {
 
 typedef struct {
     str_t cmd, name, *options;
-    int64_t time, increment, movetime, nodes;
-    int depth, movestogo;
-    int64_t timeoutTurn, timeoutMatch, maxMemory;
+    int64_t timeoutTurn, timeoutMatch, increment, nodes;
+    int depth, numThreads;
+    int64_t maxMemory;
 } EngineOptions;
 
 EngineOptions engine_options_init(void);

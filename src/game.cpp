@@ -114,13 +114,11 @@ void Game::gomocup_turn_info_command(const EngineOptions *eo,
     scope(str_destroy) str_t cmd = str_init();
 
     str_cpy_c(&cmd, "");
-    //str_cat_fmt(&cmd, "INFO time_left %I", 1000ULL);
     str_cat_fmt(&cmd, "INFO time_left %I", timeLeft);
     engine->engine_writeln(w, cmd.buf);
-
 }
 
-void Game::gomocup_game_info_command(const EngineOptions *eo[2], int ei, 
+void Game::gomocup_game_info_command(const EngineOptions *eo,
                                      const Options *option, 
                                      Worker *w, 
                                      Engine *engine)
@@ -132,22 +130,49 @@ void Game::gomocup_game_info_command(const EngineOptions *eo[2], int ei,
     str_cat_fmt(&cmd, "INFO rule %i", option->gameRule);
     engine->engine_writeln(w, cmd.buf);
 
-    // engine specific info
-    if (eo[ei]->timeoutTurn) {
+    // time control info
+    if (eo->timeoutTurn) {
         str_cpy_c(&cmd, "");
-        str_cat_fmt(&cmd, "INFO timeout_turn %I", eo[ei]->timeoutTurn);
+        str_cat_fmt(&cmd, "INFO timeout_turn %I", eo->timeoutTurn);
         engine->engine_writeln(w, cmd.buf);
     }
 
-    if (eo[ei]->timeoutMatch) {
+    // always send match timeout info (0 means no limit in match time)
+    str_cpy_c(&cmd, "");
+    str_cat_fmt(&cmd, "INFO timeout_match %I", eo->timeoutMatch);
+    engine->engine_writeln(w, cmd.buf);
+
+    if (eo->depth) {
         str_cpy_c(&cmd, "");
-        str_cat_fmt(&cmd, "INFO timeout_match %I", eo[ei]->timeoutMatch);
+        str_cat_fmt(&cmd, "INFO max_depth %i", eo->depth);
         engine->engine_writeln(w, cmd.buf);
     }
 
-    if (eo[ei]->maxMemory) {
+    if (eo->nodes) {
         str_cpy_c(&cmd, "");
-        str_cat_fmt(&cmd, "INFO max_memory %I", eo[ei]->maxMemory);
+        str_cat_fmt(&cmd, "INFO max_node %I", eo->nodes);
+        engine->engine_writeln(w, cmd.buf);
+    }
+
+    // memory limit info
+    str_cpy_c(&cmd, "");
+    str_cat_fmt(&cmd, "INFO max_memory %I", eo->maxMemory);
+    engine->engine_writeln(w, cmd.buf);
+
+    // multi threading info
+    if (eo->numThreads > 1) {
+        str_cpy_c(&cmd, "");
+        str_cat_fmt(&cmd, "INFO thread_num %i", eo->numThreads);
+        engine->engine_writeln(w, cmd.buf);
+    }
+
+    // custom info
+    scope(str_destroy) str_t left = str_init(), right = str_init();
+    for (size_t i = 0; i < vec_size(eo->options); i++) {
+        str_tok(str_tok(eo->options[i].buf, &left, "="), &right, "=");
+
+        str_cpy_c(&cmd, "");
+        str_cat_fmt(&cmd, "INFO %S %S", left, right);
         engine->engine_writeln(w, cmd.buf);
     }
 }
@@ -186,9 +211,11 @@ void Game::send_board_command(Position *pos, Worker *w, Engine *engine)
 
 void Game::compute_time_left(const EngineOptions *eo, int64_t *timeLeft) {
     if (eo->timeoutMatch > 0) {
-        // do nothing
+        // add increment to time left if increment is set
+        if (eo->increment > 0)
+            *timeLeft += eo->increment;
     } else {
-        (*timeLeft) = 2147483647LL;
+        *timeLeft = 2147483647LL;
     }
 }
 
@@ -216,7 +243,7 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         engines[i].engine_wait_for_ok(w);
 
         // send game info
-        gomocup_game_info_command(eo, i, o, w, &(engines[i]));
+        gomocup_game_info_command(eo[i], o, w, &(engines[i]));
     }
 
     scope(str_destroy) str_t cmd = str_init(), best = str_init();
@@ -301,7 +328,7 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
             break;
         }
 
-        if ((eo[ei]->time || eo[ei]->increment || eo[ei]->movetime) && timeLeft[ei] < 0) {
+        if ((eo[ei]->timeoutTurn || eo[ei]->timeoutMatch || eo[ei]->increment) && timeLeft[ei] < 0) {
             state = STATE_TIME_LOSS;
             break;
         }

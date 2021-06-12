@@ -76,8 +76,8 @@ private:
                                    const int64_t timeLeft, 
                                    Worker *w, 
                                    Engine *engine);
-    void gomocup_game_info_command(const EngineOptions *eo[2], int ei, 
-                                   const Options *option, 
+    void gomocup_game_info_command(const EngineOptions *eo, 
+                                   const Options *option,
                                    Worker *w, 
                                    Engine *engine);
 };
