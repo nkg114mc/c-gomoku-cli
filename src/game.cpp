@@ -26,11 +26,9 @@
 #include "position.h"
 
 // Applies rules to generate legal moves, and determine the state of the game
-static int game_apply_rules(const Game *g, std::vector<move_t> legal_moves, std::vector<move_t> forbidden_moves)
+static int game_apply_rules(const Game *g, std::vector<move_t> forbidden_moves)
 {
     Position *pos = &g->pos[g->ply];
-
-    pos->gen_all_legal_moves(legal_moves);
     pos->compute_forbidden_moves(forbidden_moves);
 
     bool allow_long_connection = true;
@@ -40,23 +38,12 @@ static int game_apply_rules(const Game *g, std::vector<move_t> legal_moves, std:
 
     if (pos->check_five_in_line_lastmove(allow_long_connection)) {
         return STATE_FIVE_CONNECT;
-    } else if (legal_moves.size() == 0) {
+    } else if (pos->get_moves_left() == 0) {
         return STATE_DRAW_INSUFFICIENT_SPACE;
     }
 
     // game does not end
     return STATE_NONE;
-}
-
-// moves are legal move, which are "good move"s
-static bool illegal_move(move_t move, const std::vector<move_t> moves)
-{
-    for (size_t i = 0; i < (moves.size()); i++) {
-        if (moves[i] == move) {
-            return false; // found it in legal moves, ok
-        }
-    }
-    return true; // not ok
 }
 
 // moves are forbidden move, which are "bad move"s
@@ -263,7 +250,6 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
     // the starting position has been added at game_load_fen()
 
     for (ply = 0; ; ei = (1 - ei), ply++) {
-        std::vector<move_t> legalMoves;
         std::vector<move_t> forbiddenMoves;
 
         if (played != NONE_MOVE) {
@@ -274,11 +260,8 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
             pos[ply].pos_print();
         }
 
-        state = game_apply_rules(this, legalMoves, forbiddenMoves);
+        state = game_apply_rules(this, forbiddenMoves);
         if (state > STATE_NONE) {
-            if (o->debug) {
-                pos[ply].pos_print();
-            }
             break;
         }
 
@@ -359,8 +342,6 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         }
 
         vec_push(pos, (Position){0}, Position);
-
-        legalMoves.clear();
         forbiddenMoves.clear();
     }
 

@@ -159,20 +159,6 @@ void Position::delPiece(Pos pos) {
 	board[pos] = EMPTY;
 }
 
-void Position::gen_all_legal_moves(std::vector<move_t> &legal_moves) const {
-    legal_moves.clear();
-    
-    for (int i = 0; i < boardSize; i++) {
-        for (int j = 0; j < boardSize; j++) {
-            Pos p = POS(i, j);
-            if (board[p] == EMPTY) {
-                move_t m = buildMove(i, j, playerToMove);
-                legal_moves.push_back(m);
-            }
-        }
-    }
-}
-
 bool Position::isInBoard(Pos pos) const {
 	assert(pos < MaxBoardSizeSqr);
 	return (board[pos] != WALL);

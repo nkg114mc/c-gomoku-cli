@@ -60,6 +60,7 @@ public:
 
     inline Color get_turn() { return playerToMove; }
     inline int get_move_count() { return moveCount; }
+    inline int get_moves_left() { return boardSizeSqr - moveCount; }
     inline move_t* get_hist_moves() { return historyMoves; }
 
     void move(move_t m);
@@ -73,7 +74,6 @@ public:
     void pos_print() const;
 
     bool is_legal_move(move_t move) const;
-    void gen_all_legal_moves(std::vector<move_t> &legal_moves) const;
     void compute_forbidden_moves(std::vector<move_t> &forbidden_moves) const;
 
     bool check_five_in_line_side(Color side, bool allow_long_connection = true);// const;
