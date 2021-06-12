@@ -352,9 +352,15 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         : RESULT_DRAW;
 }
 
-void Game::game_decode_state(str_t *result, str_t *reason)
+void Game::game_decode_state(str_t *result, str_t *reason, const char* restxt[3])
 {
-    str_cpy_c(result, "1/2-1/2");
+    const char* DefaultResultTxt[3] = {
+        "0-1", "1/2-1/2", "1-0"
+    };
+    if (!restxt)
+        restxt = DefaultResultTxt;
+
+    str_cpy_c(result, restxt[RESULT_DRAW]);
     str_clear(reason);
 
     // Note: pos.get_turn() returns next side to move, so when pos is a win position
@@ -365,28 +371,27 @@ void Game::game_decode_state(str_t *result, str_t *reason)
         str_cpy_c(result, "*");
         str_cpy_c(reason, "Unterminated");
     } else if (state == STATE_FIVE_CONNECT) {
-        str_cpy_c(result, pos[ply].get_turn() == BLACK ? "0-1" : "1-0");
+        str_cpy_c(result, pos[ply].get_turn() == BLACK ? restxt[RESULT_LOSS] : restxt[RESULT_WIN]);
         str_cpy_c(reason, pos[ply].get_turn() == BLACK ? "White win by five connection" : 
                                                          "Black win by five connection");
     } else if (state == STATE_DRAW_INSUFFICIENT_SPACE)
         str_cpy_c(reason, "Draw by fullfilled board");
     else if (state == STATE_ILLEGAL_MOVE) {
-        str_cpy_c(result, pos[ply].get_turn() == BLACK ? "0-1" : "1-0");
+        str_cpy_c(result, pos[ply].get_turn() == BLACK ? restxt[RESULT_LOSS] : restxt[RESULT_WIN]);
         str_cpy_c(reason, pos[ply].get_turn() == BLACK ? "White win by opponent illegal move" :
                                                          "Black win by opponent illegal move");
     } else if (state == STATE_FORBIDDEN_MOVE) {
-        //str_cpy_c(result, pos[ply].turn == BLACK ? "0-1" : "1-0");
         assert(pos[ply].get_turn() == BLACK);
-        str_cpy_c(result, "0-1");
+        str_cpy_c(result, restxt[RESULT_LOSS]);
         str_cpy_c(reason, "black play on forbidden position");
     } else if (state == STATE_DRAW_ADJUDICATION)
         str_cpy_c(reason, "Draw by adjudication");
     else if (state == STATE_RESIGN) {
-        str_cpy_c(result, pos[ply].get_turn() == BLACK ? "0-1" : "1-0");
+        str_cpy_c(result, pos[ply].get_turn() == BLACK ? restxt[RESULT_LOSS] : restxt[RESULT_WIN]);
         str_cpy_c(reason, pos[ply].get_turn() == BLACK ? "White win by adjudication" :
                                                          "Black win by adjudication");
     } else if (state == STATE_TIME_LOSS) {
-        str_cpy_c(result, pos[ply].get_turn() == BLACK ? "0-1" : "1-0");
+        str_cpy_c(result, pos[ply].get_turn() == BLACK ? restxt[RESULT_LOSS] : restxt[RESULT_WIN]);
         str_cpy_c(reason, pos[ply].get_turn() == BLACK ? "White win by time forfeit" : 
                                                          "Black win by time forfeit");
     } else
@@ -446,7 +451,7 @@ void Game::game_export_sgf(str_t *out)
     str_cat_c(out, "(");
     str_cat_c(out, ";FF[4]GM[4]"); // common info
     
-    str_cat_c(out, "EV[?]");
+    str_cat_fmt(out, "GN[%S x %S]", names[BLACK], names[WHITE]);
     time_t rawtime;
     struct tm * timeinfo;
     char timeBuffer[128];
@@ -458,12 +463,13 @@ void Game::game_export_sgf(str_t *out)
     str_cat_fmt(out, "RU[%i]", game_rule);
     str_cat_fmt(out, "SZ[%i]", board_size);
     str_cat_fmt(out, "TM[%s]", "0000");
-    str_cat_fmt(out, "BP[%S]", names[BLACK]);
-    str_cat_fmt(out, "WP[%S]", names[WHITE]);
+    str_cat_fmt(out, "PB[%S]", names[BLACK]);
+    str_cat_fmt(out, "PW[%S]", names[WHITE]);
 
-    // Result in PGN format "1-0", "0-1", "1/2-1/2" (from white pov)
+    // Result in SGF format "W+score", "0", "B+score"
+    const char* ResultTxt[3] = { "W+1", "0", "B+1" };
     scope(str_destroy) str_t result = str_init(), reason = str_init();
-    game_decode_state(&result, &reason);
+    game_decode_state(&result, &reason, ResultTxt);
     str_cat_fmt(out, "RE[%S]", result);
     str_cat_fmt(out, "TE[%S]", reason);
 
