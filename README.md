@@ -53,6 +53,7 @@ c-gomoku-cli -each tc=180/30 \
  * `sprt [elo0=E0] elo1=E1 [alpha=A] [beta=B]`: Performs a Sequential Probability Ratio Test for `H1: elo=E1` vs `H0: elo=E0`, where `alpha` is the type I error probability (false positive), and `beta` is type II error probability (false negative). Default values are `elo0=0`, and `alpha=beta=0.05`. This can only be used in matches between two players.
  * `log`: Write all I/O communication with engines to file(s). This produces `c-gomoku-cli.id.log`, where `id` is the thread id (range `1..concurrency`). Note that all communications (including error messages) starting with `[id]` mean within the context of thread number `id`, which tells you which log file to inspect (id = 0 is the main thread, which does not product a log file, but simply writes to stdout).
  * `debug`: Turn on debug mode. In debug mode, more detailed information about game and engines will be printed, and `-log` will also be turned on automatically.
+ * `sendbyboard`: Send full position using `BOARD` command before each move. If not specified, continuous position are sent using `TURN`. Some engines might behave differently when receiving `BOARD` rather than `TURN`.
  * `openings file=FILE [order=ORDER] [srand=N]`:
    * Read opening positions from `FILE`, in PLAINTEXT format. See section below about what is PLAINTEXT format.
    * `order` can be `random` or `sequential` (default value).

@@ -252,6 +252,8 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
     int resignCount[NB_COLOR] = {0};
     int ei = reverse;  // engines[ei] has the move
     int64_t timeLeft[2] = {0LL, 0LL};//{eo[0]->time, eo[1]->time};
+    bool canUseTurn[2] = {false, false};
+
     scope(str_destroy) str_t pv = str_init();
 
     // init time control
@@ -289,15 +291,18 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         // trigger think!
         if (pos[ply].get_move_count() == 0) {
             engines[ei].engine_writeln(w, "BEGIN");
+            canUseTurn[ei] = true;
         } else {
-            if (o->useTURN) { // use TURN to trigger think
-                assert(ply == pos[ply].get_move_count()); // Can not do TURN when game history is unknown   
-                std::string last_move_str = pos[ply].move_to_gomostr(played);
-                std::string turn_cmd = std::string("TURN ") + last_move_str;
-                char tmp[32];
-                strcpy(tmp, turn_cmd.c_str());
+            if (o->useTURN && canUseTurn[ei]) { // use TURN to trigger think
+                Pos p = getPosFromMove(played);
+                int x = Position::getPosX(p);
+                int y = Position::getPosY(p);
+                str_cpy_c(&cmd, "");
+                str_cat_fmt(&cmd, "TURN %i,%i", x, y);
+                engines[ei].engine_writeln(w, cmd.buf);
             } else { // use BOARD to trigger think
                 send_board_command(&(pos[ply]), w, &(engines[ei]));
+                canUseTurn[ei] = true;
             }
         }
 
