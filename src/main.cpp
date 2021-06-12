@@ -109,7 +109,7 @@ static void *thread_start(void *arg)
                 }
 
                 ei[i] = job.ei[i];
-                engines[i].engine_init(w, eo[ei[i]].cmd.buf, eo[ei[i]].name.buf, eo[ei[i]].options, options.debug);
+                engines[i].engine_init(w, eo[ei[i]].cmd.buf, eo[ei[i]].name.buf, options.debug);
                 jq.job_queue_set_name(ei[i], engines[i].name.buf);
             }
         }

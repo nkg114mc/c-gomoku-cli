@@ -46,7 +46,7 @@ public:
     bool isDebug;
     char pad[3];
 
-    void engine_init(Worker *w, const char *cmd, const char *name, const str_t *options, bool debug);
+    void engine_init(Worker *w, const char *cmd, const char *name, bool debug);
     void engine_destroy(Worker *w);
 
     void engine_readln(const Worker *w, str_t *line);
@@ -56,7 +56,7 @@ public:
     void engine_wait_for_ok(Worker *w);
     bool engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, str_t *best, str_t *pv, Info *info);
 
-    void engine_about(Worker *w);
+    void engine_about(Worker *w, const char* fallbackName);
     // process MESSAGE, UNKNOWN, ERROR, DEBUG messages
     void engine_process_message_ifneeded(const char *line);
     void engine_parse_thinking_messages(const char *line, Info *info);

@@ -219,13 +219,12 @@ static void engine_parse_cmd(const char *cmd, str_t *cwd, str_t *run, str_t **ar
         vec_push(*args, str_init_from(token), str_t);
 }
 
-void Engine::engine_init(Worker *w, const char *cmd, const char *engname, 
-    [[maybe_unused]] const str_t *options, bool debug)
+void Engine::engine_init(Worker *w, const char *cmd, const char *engname, bool debug)
 {
     if (!*cmd)
         DIE("[%d] missing command to start engine.\n", w->id);
 
-    this->name = str_init_from_c(*engname ? engname : cmd); // default value
+    this->name = str_init_from_c(engname);
     this->isDebug = debug;
 
     // Parse cmd into (cwd, run, args): we want to execute run from cwd with args.
@@ -248,15 +247,7 @@ void Engine::engine_init(Worker *w, const char *cmd, const char *engname,
     free(argv);
 
     // parse engine ABOUT infomation
-    engine_about(w);
-/*
-    for (size_t i = 0; i < vec_size(options); i++) {
-        //scope(str_destroy) str_t oname = str_init(), ovalue = str_init();
-        //str_tok(str_tok(options[i].buf, &oname, "="), &ovalue, "=");
-        //str_cpy_fmt(&line, "setoption name %S value %S", oname, ovalue);
-        //engine_writeln(w, line.buf);
-    }
-*/
+    engine_about(w, cmd);
 }
 
 void Engine::engine_destroy(Worker *w)
@@ -375,7 +366,7 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
     return result;
 }
 
-static void parse_and_display_engine_about(str_t &line) {
+static void parse_and_display_engine_about(str_t &line, str_t* engine_name) {
     int flag = 0;
     std::vector<std::string> tokens;
     std::stringstream ss;
@@ -409,6 +400,9 @@ static void parse_and_display_engine_about(str_t &line) {
         if (tokens[i] == "name") {
             if ((i + 1) < tokens.size()) {
                 name = tokens[i + 1];
+                // Set engine name to about name
+                if (!*engine_name->buf)
+                    str_cpy_c(engine_name, name.c_str());
             }
         } else if (tokens[i] == "version") {
             if ((i + 1) < tokens.size()) {
@@ -429,8 +423,8 @@ static void parse_and_display_engine_about(str_t &line) {
 }
 
 // process engine ABOUT command
-void Engine::engine_about(Worker *w) {
-    w->deadline_set(name.buf, system_msec() + 2000);
+void Engine::engine_about(Worker *w, const char* fallbackName) {
+    w->deadline_set(*name.buf ? name.buf : fallbackName, system_msec() + 2000);
     engine_writeln(w, "ABOUT");
     scope(str_destroy) str_t line = str_init();
 
@@ -439,7 +433,11 @@ void Engine::engine_about(Worker *w) {
     w->deadline_clear();
     
     // parse about infos
-    parse_and_display_engine_about(line);
+    parse_and_display_engine_about(line, &name);
+
+    // If we can not get a name from engname or about, use fallback name instead
+    if (!*name.buf)
+        str_cpy_c(&name, fallbackName);
 }
 
 // process MESSAGE, UNKNOWN, ERROR, DEBUG messages
