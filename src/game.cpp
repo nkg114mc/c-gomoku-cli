@@ -164,22 +164,17 @@ void Game::gomocup_game_info_command(const EngineOptions *eo,
     }
 }
 
-int colorToGomocupStoneIdx(Color c) {
-    switch (c) {
-    case BLACK:
-        return 1;
-    case WHITE:
-        return 2;
-    }
-    assert(false);
-}
-
 void Game::send_board_command(Position *pos, Worker *w, Engine *engine)
 {
     engine->engine_writeln(w, "BOARD");
 
     int moveCnt = pos->get_move_count();
     move_t *histMoves = pos->get_hist_moves();
+
+    // make sure last color is 2 according to piskvork protocol
+    auto colorToGomocupStoneIdx = [lastColor = getColorFromMove(histMoves[moveCnt-1])](Color c) {
+        return c == lastColor ? 2 : 1;
+    };
 
     for (int i = 0; i < moveCnt; i++) {
         Color color = getColorFromMove(histMoves[i]);
