@@ -28,6 +28,7 @@ typedef struct {
     int concurrency, games, rounds;
     int resignCount, resignScore;
     int drawCount, drawScore;
+    int forceDrawAfter;
     bool log, random, repeat, sprt, gauntlet, useTURN;
     char pad[2];
     int boardSize;

@@ -471,6 +471,9 @@ void Engine::engine_process_message_ifneeded(const char *line)
     }
 }
 
-void Engine::engine_parse_thinking_messages([[maybe_unused]] const char *line, [[maybe_unused]] Info *info)
+void Engine::engine_parse_thinking_messages([[maybe_unused]] const char *line, Info *info)
 {
+    // Set default value
+    info->score = 0;
+    info->depth = 0;
 }

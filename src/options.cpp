@@ -243,6 +243,8 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
             i = options_parse_adjudication(argc, argv, i + 1, &o->resignCount, &o->resignScore);
         else if (!strcmp(argv[i], "-draw"))
             i = options_parse_adjudication(argc, argv, i + 1, &o->drawCount, &o->drawScore);
+        else if (!strcmp(argv[i], "-drawafter"))
+            o->forceDrawAfter = atoi(argv[++i]);
         else if (!strcmp(argv[i], "-sprt"))
             i = options_parse_sprt(argc, argv, i + 1, o);
         else if (!strcmp(argv[i], "-rule")) {
@@ -328,6 +330,7 @@ void options_print(Options *o, EngineOptions **eo) {
     std::cout << "resignScore = " << o->resignScore << std::endl;
     std::cout << "drawCount = " << o->drawCount << std::endl;
     std::cout << "drawScore = " << o->drawScore << std::endl;
+    std::cout << "drawAfter = " << o->forceDrawAfter << std::endl;
     std::cout << "debug = " << o->debug << std::endl;
     std::cout << std::endl;
 

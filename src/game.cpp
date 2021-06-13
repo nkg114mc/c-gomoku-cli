@@ -260,6 +260,12 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
             break;
         }
 
+        // Apply force draw adjudication rule
+        if (o->forceDrawAfter && pos[ply].get_move_count() >= o->forceDrawAfter) {
+            state = STATE_DRAW_ADJUDICATION;
+            break;
+        }
+
         // Prepare timeLeft[ei]
         compute_time_left(eo[ei], &(timeLeft[ei]));
 

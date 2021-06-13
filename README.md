@@ -36,6 +36,7 @@ c-gomoku-cli -each tc=180/30 \
  * `concurrency N`: Set the maximum number of concurrent games to N (default value 1).
  * `draw COUNT SCORE`: Adjudicate the game as a draw, if the score of both engines is within `SCORE` centipawns from zero, for at least `COUNT` consecutive moves.
  * `resign COUNT SCORE`: Adjudicate the game as a loss, if an engine's score is at least `SCORE` centipawns below zero, for at least `COUNT` consecutive moves.
+ * `drawafter N`: Adjudicate the game as a draw, if the number of moves in one game reaches `N` ply. `N` must be greater then `0` to be effective.
  * `rule RULE`: Set the game rule with Gomocup rule code `RULE`.
    * `RULE=0`: Play with gomoku rule and winner wins by five or longer connection.
    * `RULE=1`: Play with gomoku rule but winner only wins by exact-5 connection (longer connections will be ignored).
