@@ -4,7 +4,7 @@ c-gomoku-cli is a command line interface for gomoku/renju engines that support [
 
 Different from computer chess community where a lot of interface tools have been developed in the passed 20 years, computer gomoku/renju is still lack of tools for engine-vs-engine matches. Most of the existing tools are GUI based, which is not suitable for distributed systems like high performance clusters. The motivation of c-gomoku-cli is to provide an open-source command line tool that can run large scale engine-vs-engine matches on multi-core workstations or cluster systems in parallel. The large-scale engine-vs-engine testing is common approach for quantifying the strength improvements of computer game engines, like chess. With this tool, engine designers can concisely measure the new engine ELO gain by letting it play with the old version for enough number of games.
 
-Instead of sticking on the C language to avoid the dependency hell in c-chess-cli, C++ is chosen to be the primary programming language in this project, because my target is to build a usable tool and C++ contains some features that can bring more convenience to achieving this target. Similar to c-chess-cli, c-gomoku-cli is primarily developed for Unix/Linux, it should work on all POSIX operating systems, including MacOS and Android. Windows is not supported so far.
+Instead of sticking on the C language to avoid the dependency hell in c-chess-cli, C++ is chosen to be the primary programming language in this project, because my target is to build a usable tool and C++ contains some features that can bring more convenience to achieving this target. Similar to c-chess-cli, c-gomoku-cli is primarily developed for Unix/Linux, it should work on all POSIX operating systems, including MacOS and Android. Windows support is added by Haobin (dhbloo).
 
 
 ## Compiling from the Source
@@ -86,4 +86,10 @@ You can see more examples from [Gomocup 2020 result page](https://gomocup.org/re
 
 ## Acknowledgement
 
-Thanks to lucasart for developing the *c-chess-cli* project. His prior work provides a perfect starting point for the development of c-gomoku-cli.
+Thanks to lucasart for developing the *c-chess-cli* project. His prior work provides a perfect starting point for the development of c-gomoku-cli. Thanks to Haobin for contributing the support on Windows. It makes c-gomoku-cli avaliable to all Windows based engines.
+
+## Contributors
+
+Lucas Braesch ([lucasart](https://github.com/lucasart))
+Chao Ma ([nkg114mc](https://github.com/nkg114mc))
+Haobin Duan ([dhbloo](https://github.com/dhbloo))
