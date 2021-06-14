@@ -61,6 +61,7 @@ c-gomoku-cli -each tc=180/30 \
    * `srand` sets the seed of the random number generator to `N`. The default value `N=0` will set the seed automatically to an unpredictable number. Any non-zero number will generate a unique, reproducible random sequence.
  * `pgn FILE`: Save a dummy game to `FILE`, in PGN format. PGN format is for chess games. We replace the moves with some random chess moves but only keep the game result and player names. This dummy PGN file can be input by [BayesianElo](https://www.remi-coulom.fr/Bayesian-Elo/) to compute ELO scores.
  * `sgf FILE`: Save a game to `FILE`, in SGF format.
+ * `msg FILE`: Save engine messages to `FILE`, in TXT format. Messages in each games are grouped by game index.
 
 ### Engine Options
 

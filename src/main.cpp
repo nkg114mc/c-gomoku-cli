@@ -34,6 +34,7 @@ static EngineOptions *eo;
 static Openings openings;
 static SeqWriter pgnSeqWriter;
 static SeqWriter sgfSeqWriter;
+static SeqWriter msgSeqWriter;
 static JobQueue jq;
 
 static void main_destroy(void)
@@ -48,6 +49,9 @@ static void main_destroy(void)
 
     if (options.sgf.len)
         sgfSeqWriter.seq_writer_destroy();
+
+    if (options.msg.len)
+        msgSeqWriter.seq_writer_destroy();
 
     openings.openings_destroy(0);
     jq.job_queue_destroy();
@@ -68,13 +72,14 @@ static void main_init(int argc, const char **argv)
     jq.job_queue_init(vec_size(eo), options.rounds, options.games, options.gauntlet);
     openings.openings_init(options.openings.buf, options.random, options.srand, 0);
 
-    if (options.pgn.len) {
+    if (options.pgn.len)
         pgnSeqWriter.seq_writer_init(options.pgn.buf, FOPEN_APPEND_MODE);
-    }
 
-    if (options.sgf.len) {
+    if (options.sgf.len)
         sgfSeqWriter.seq_writer_init(options.sgf.buf, FOPEN_APPEND_MODE);
-    }
+
+    if (options.msg.len)
+        msgSeqWriter.seq_writer_init(options.msg.buf, FOPEN_APPEND_MODE);
 
     // Prepare Workers[]
     for (int i = 0; i < options.concurrency; i++) {
@@ -96,11 +101,19 @@ static void *thread_start(void *arg)
     Engine engines[2] = {0};
 
     scope(str_destroy) str_t fen = str_init();
+    scope(str_destroy) str_t messages = str_init();
+    str_t *msg = options.msg.len ? &messages : nullptr;
     Job job = {0};
     int ei[2] = {-1, -1};  // eo[ei[0]] plays eo[ei[1]]: initialize with invalid values to start
     size_t idx = 0, count = 0;  // game idx and count (shared across workers)
 
     while (jq.job_queue_pop(&job, &idx, &count)) {
+        // Clear all previous engine messages and write game index
+        if (msg) {
+            str_cpy_c(msg, "------------------------------\n");
+            str_cat_fmt(msg, "Game ID: %I\n", idx);
+        }
+
         // Engine stop/start, as needed
         for (int i = 0; i < 2; i++) {
             if (job.ei[i] != ei[i]) {
@@ -109,7 +122,7 @@ static void *thread_start(void *arg)
                 }
 
                 ei[i] = job.ei[i];
-                engines[i].engine_init(w, eo[ei[i]].cmd.buf, eo[ei[i]].name.buf, options.debug);
+                engines[i].engine_init(w, eo[ei[i]].cmd.buf, eo[ei[i]].name.buf, options.debug, msg);
                 jq.job_queue_set_name(ei[i], engines[i].name.buf);
             }
         }
@@ -131,6 +144,10 @@ static void *thread_start(void *arg)
         printf("[%d] Started game %zu of %zu (%s vs %s)\n", w->id, idx + 1, count,
             engines[blackIdx].name.buf, engines[oppositeColor((Color)blackIdx)].name.buf);
 
+        if (msg)
+            str_cat_fmt(msg, "Engines: %S x %S\n", engines[blackIdx].name, 
+                        engines[oppositeColor((Color)blackIdx)].name);
+
         const EngineOptions *eoPair[2] = {&eo[ei[0]], &eo[ei[1]]};
         const int wld = game.game_play(w, &options, engines, eoPair, job.reverse);
 
@@ -148,6 +165,10 @@ static void *thread_start(void *arg)
             game.game_export_sgf(&sgfText);
             sgfSeqWriter.seq_writer_push(idx, sgfText);
         }
+
+        // Write engine messages to TXT file
+        if (msg)
+            msgSeqWriter.seq_writer_push(idx, messages);
 
         // Write to stdout a one line summary of the game
         scope(str_destroy) str_t result = str_init(), reason = str_init();

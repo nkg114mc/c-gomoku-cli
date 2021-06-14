@@ -291,7 +291,8 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         }
 
         Info info = {0};
-        const bool ok = engines[ei].engine_bestmove(w, &timeLeft[ei], eo[ei]->timeoutTurn, &best, &pv, &info);
+        const bool ok = engines[ei].engine_bestmove(w, &timeLeft[ei], eo[ei]->timeoutTurn,
+                                                    &best, &pv, &info, pos[ply].get_move_count() + 1);
         vec_push(this->info, info, Info);
 
         // Parses the last PV sent. An invalid PV is not fatal, but logs some warnings. Keep track

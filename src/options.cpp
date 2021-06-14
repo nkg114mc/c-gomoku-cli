@@ -180,7 +180,7 @@ Options options_init(void)
     o.openings = str_init();
     o.pgn = str_init();
     o.sgf = str_init();
-    o.plaintext = str_init();
+    o.msg = str_init();
 
     // non-zero default values
     o.concurrency = 1;
@@ -239,7 +239,9 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
             str_cpy_c(&o->pgn, argv[++i]);
         } else if (!strcmp(argv[i], "-sgf")) {
             str_cpy_c(&o->sgf, argv[++i]);
-        } else if (!strcmp(argv[i], "-resign"))
+        } else if (!strcmp(argv[i], "-msg"))
+            str_cpy_c(&o->msg, argv[++i]);
+        else if (!strcmp(argv[i], "-resign"))
             i = options_parse_adjudication(argc, argv, i + 1, &o->resignCount, &o->resignScore);
         else if (!strcmp(argv[i], "-draw"))
             i = options_parse_adjudication(argc, argv, i + 1, &o->drawCount, &o->drawScore);
@@ -318,6 +320,7 @@ void options_print(Options *o, EngineOptions **eo) {
     std::cout << "gameRule = " << o->gameRule << std::endl;
     std::cout << "pgn = " << o->pgn.buf << std::endl;
     std::cout << "sgf = " << o->sgf.buf << std::endl;
+    std::cout << "msg = " << o->msg.buf << std::endl;
     std::cout << "log = " << o->log << std::endl;
     std::cout << "random = " << o->random << std::endl;
     std::cout << "repeat = " << o->repeat << std::endl;

@@ -219,13 +219,14 @@ static void engine_parse_cmd(const char *cmd, str_t *cwd, str_t *run, str_t **ar
         vec_push(*args, str_init_from(token), str_t);
 }
 
-void Engine::engine_init(Worker *w, const char *cmd, const char *engname, bool debug)
+void Engine::engine_init(Worker *w, const char *cmd, const char *engname, bool debug, str_t *outmsg)
 {
     if (!*cmd)
         DIE("[%d] missing command to start engine.\n", w->id);
 
     this->name = str_init_from_c(engname);
     this->isDebug = debug;
+    this->messages = outmsg;
 
     // Parse cmd into (cwd, run, args): we want to execute run from cwd with args.
     scope(str_destroy) str_t cwd = str_init(), run = str_init();
@@ -308,8 +309,8 @@ void Engine::engine_wait_for_ok(Worker *w)
     w->deadline_clear();
 }
 
-bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, str_t *best, str_t *pv,
-    Info *info)
+bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, str_t *best,
+    str_t *pv, Info *info, int moveply)
 {
     int result = false;
     scope(str_destroy) str_t line = str_init(), token = str_init();
@@ -337,14 +338,17 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
 
         const char *tail = NULL;
 
+        if (this->isDebug) {
+            engine_process_message_ifneeded(line.buf);
+        }
+
         if ((tail = str_prefix(line.buf, "MESSAGE"))) {
-            if (this->isDebug) {
-                engine_process_message_ifneeded(line.buf);
-            }
+            // record engine messages
+            if (messages)
+                str_cat_fmt(messages, "%i) %S: %s\n", moveply, name, tail + 1);
 
             // parse and store thing infomation to info
             engine_parse_thinking_messages(line.buf, info);
-
         } else if (Position::is_valid_move_gomostr(line.buf)) {
             str_cpy(best, line);
             result = true;
