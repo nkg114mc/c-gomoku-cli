@@ -153,16 +153,16 @@ static void *thread_start(void *arg)
 
         // Write to PGN file
         if (options.pgn.len) {
-            int pgnVerbosity = 3;
+            const int pgnVerbosity = 0;
             scope(str_destroy) str_t pgnText = str_init();
-            game.game_export_pgn(pgnVerbosity, &pgnText);
+            game.game_export_pgn(idx, pgnVerbosity, &pgnText);
             pgnSeqWriter.seq_writer_push(idx, pgnText);
         }
 
         // Write to SGF file
         if (options.sgf.len) {
             scope(str_destroy) str_t sgfText = str_init();
-            game.game_export_sgf(&sgfText);
+            game.game_export_sgf(idx, &sgfText);
             sgfSeqWriter.seq_writer_push(idx, sgfText);
         }
 

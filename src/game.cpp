@@ -406,10 +406,11 @@ void Game::game_decode_state(str_t *result, str_t *reason, const char* restxt[3]
 }
 
 
-void Game::game_export_pgn(int verbosity, str_t *out)
+void Game::game_export_pgn(size_t gameIdx, int verbosity, str_t *out)
 {
-    str_cat_fmt(out, "[Event \"?\"]\n");
-    str_cat_fmt(out, "[Site \"?\"]\n");
+    // Record game id as event name for each game
+    str_cat_fmt(out, "[Event \"%I\"]\n", gameIdx);
+    //str_cat_fmt(out, "[Site \"?\"]\n");
 
     time_t rawtime;
     struct tm * timeinfo;
@@ -430,7 +431,6 @@ void Game::game_export_pgn(int verbosity, str_t *out)
     str_cat_fmt(out, "[Termination \"%S\"]\n", reason);
 
     str_cat_fmt(out, "[PlyCount \"%i\"]\n", ply);
-    scope(str_destroy) str_t san = str_init();
 
     if (verbosity > 0) {
         // Print the moves
@@ -451,14 +451,17 @@ void Game::game_export_pgn(int verbosity, str_t *out)
     str_cat_c(str_cat(out, result), "\n\n");
 }
 
-void Game::game_export_sgf(str_t *out)
+void Game::game_export_sgf(size_t gameIdx, str_t *out)
 {
     const int movePerline = 8;
 
     str_cat_c(out, "(");
     str_cat_c(out, ";FF[4]GM[4]"); // common info
     
-    str_cat_fmt(out, "GN[%S x %S]", names[BLACK], names[WHITE]);
+    // Record game id as game name for each game
+    str_cat_fmt(out, "GN[%I]", gameIdx);
+    // Record engine pair as event name for each game
+    str_cat_fmt(out, "EV[%S x %S]", names[BLACK], names[WHITE]);
     time_t rawtime;
     struct tm * timeinfo;
     char timeBuffer[128];
@@ -469,7 +472,7 @@ void Game::game_export_sgf(str_t *out)
     str_cat_fmt(out, "RO[%i.%i]", round + 1, game + 1);
     str_cat_fmt(out, "RU[%i]", game_rule);
     str_cat_fmt(out, "SZ[%i]", board_size);
-    str_cat_fmt(out, "TM[%s]", "0000");
+    //str_cat_fmt(out, "TM[%s]", "0000");
     str_cat_fmt(out, "PB[%S]", names[BLACK]);
     str_cat_fmt(out, "PW[%S]", names[WHITE]);
 
@@ -479,10 +482,6 @@ void Game::game_export_sgf(str_t *out)
     game_decode_state(&result, &reason, ResultTxt);
     str_cat_fmt(out, "RE[%S]", result);
     str_cat_fmt(out, "TE[%S]", reason);
-
-    //str_cat_fmt(out, "[PlyCount \"%i\"]\n", ply);
-    scope(str_destroy) str_t san = str_init();
-
     str_push(out, '\n');
 
     // Print the moves
@@ -490,7 +489,6 @@ void Game::game_export_sgf(str_t *out)
     
     // openning moves
     int openingMoveCnt = lastPos->get_move_count() - ply;
-
 
     // played moves
     int moveCnt = 0;

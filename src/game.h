@@ -65,8 +65,8 @@ public:
         const EngineOptions *eo[2], bool reverse);
 
     void game_decode_state(str_t *result, str_t *reason, const char* restxt[3] = nullptr);
-    void game_export_pgn(int verbosity, str_t *out);
-    void game_export_sgf(str_t *out);
+    void game_export_pgn(size_t gameIdx, int verbosity, str_t *out);
+    void game_export_sgf(size_t gameIdx, str_t *out);
 
 private:
 
