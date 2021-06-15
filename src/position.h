@@ -44,6 +44,10 @@ const GameRule ALL_VALID_RULES[3] = {
     RENJU 
 };
 
+enum OpeningType {
+    OPENING_OFFSET, OPENING_POS
+};
+
 class Position {
 public:
 	static const int MaxBoardSize = 1 << MAX_BOARD_SIZE_BIT;
@@ -80,8 +84,7 @@ public:
     bool check_five_in_line_lastmove(bool allow_long_connection);// const;
 
     // about opening
-    bool apply_openning_plaintext(str_t &opening_str);
-    bool parse_openning_line_str(std::vector<Pos> &openning_pos, str_t &linestr, int boardSz);
+    bool apply_opening(str_t &opening_str, OpeningType type);
 
     // static methods
     static void pos_move_with_copy(Position *after, const Position *before, move_t m);
@@ -107,7 +110,8 @@ private:
     int winConnectionLen;
     Pos winConnectionPos[32];
     void check_five_helper(bool allow_long_connc, int &conCnt, int & fiveCnt, Pos* connectionLine);
-
+    bool parse_opening_offset_linestr(std::vector<Pos> &opening_pos, str_t &linestr);
+    bool parse_opening_pos_linestr(std::vector<Pos> &opening_pos, str_t &linestr);
 };
 
 inline Color oppositeColor(Color color)

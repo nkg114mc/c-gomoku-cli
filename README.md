@@ -55,8 +55,8 @@ c-gomoku-cli -each tc=180/30 \
  * `log`: Write all I/O communication with engines to file(s). This produces `c-gomoku-cli.id.log`, where `id` is the thread id (range `1..concurrency`). Note that all communications (including error messages) starting with `[id]` mean within the context of thread number `id`, which tells you which log file to inspect (id = 0 is the main thread, which does not product a log file, but simply writes to stdout).
  * `debug`: Turn on debug mode. In debug mode, more detailed information about game and engines will be printed, and `-log` will also be turned on automatically.
  * `sendbyboard`: Send full position using `BOARD` command before each move. If not specified, continuous position are sent using `TURN`. Some engines might behave differently when receiving `BOARD` rather than `TURN`.
- * `openings file=FILE [order=ORDER] [srand=N]`:
-   * Read opening positions from `FILE`, in PLAINTEXT format. See section below about what is PLAINTEXT format.
+ * `openings file=FILE [type=TYPE] [order=ORDER] [srand=N]`:
+   * Read opening positions from `FILE`, in `TYPE` format. `type` can be `offset` (default value) or `pos`. See "Openings File Format" section below about details of different formats.
    * `order` can be `random` or `sequential` (default value).
    * `srand` sets the seed of the random number generator to `N`. The default value `N=0` will set the seed automatically to an unpredictable number. Any non-zero number will generate a unique, reproducible random sequence.
  * `pgn FILE`: Save a dummy game to `FILE`, in PGN format. PGN format is for chess games. We replace the moves with some random chess moves but only keep the game result and player names. This dummy PGN file can be input by [BayesianElo](https://www.remi-coulom.fr/Bayesian-Elo/) to compute ELO scores.
@@ -88,7 +88,11 @@ c-gomoku-cli -each tc=180/30 \
 
 ### Openings File Format
 
-So far c-gomoku-cli only accept openings in plaintext format (`*.txt`). In a plaintext opening file, each line is an opening position. The opening position is denoted by the move sequence: `<black_move>, <black_move>, <black_move>`... . Each move is seperated with a comma "`,`" and a space "` `". The last move will not be followed by any comma or space. Each move is in format `<x-offset>,<y-offset>`, no space in between. Note that here each coordinate is the offset from the center of the board, which is different from the move coordinate of Gomocup protocol where (0,0) is up-left corner of the board. Offset value can be negative.
+So far c-gomoku-cli only accept openings in plaintext format (`*.txt`). In a plaintext opening file, each line is an opening position. Currently there are two notation types for a position: `offset` and `pos`.
+
+#### "Offset" opening notation (Gomocup opening format)
+
+Offset opening notation is denoted by the move sequence: `<black_move>, <white_move>, <black_move>`... . Each move is separated with a comma "`,`" and a space "". The last move will not be followed by any comma or space. Each move is in format `<x-offset>,<y-offset>`, no space in between. Note that here each coordinate is the offset from the center of the board, which is different from the move coordinate of Gomocup protocol where (0,0) is up-left corner of the board. Offset value can be negative.
 Assuming that a board is in size `SIZE`, the conversion between plaintext offsets `<x-offset>,<y-offset>` and Gomocup move `<x>,<y>` is:
 
 ```
@@ -96,11 +100,23 @@ HALF_SIZE = floor(SIZE / 2)
 <x> = <x-offset> + HALF_SIZE
 <y> = <y-offset> + HALF_SIZE
 ```
-The following is an example position in plaintext format:
+The following is an example position in "offset" notation:
 ```
 8,-3, 6,-4, 5,-4, 4,-3, 2,-8, -1,-5
 ```
 You can see more examples from [Gomocup 2020 result page](https://gomocup.org/results/gomocup-result-2020/) (download the results+openings from the link at the very bottom of that page).
+
+#### "Pos" opening notation
+
+Pos opening notation is denoted by a sequence of move position, with no space or any forms of delimiter in between: `<black_move><white_move><block_move>`... . Each move is in format `<x-coord><y-coord>`, while `<x-coord>` is a letter starting from "`a`", `<y-coord>` is a number starting from "`1`". Coordinate is the offset from the upper-left corner of the board. This notation is only suitable for board size less than `27`.
+
+The following is an example position in "pos" notation:
+
+```
+b7d6e6f7h2k5
+```
+
+This notation is common among many Gomoku/Renju applications. (For example, you can acquire a pos notation text by using "getpos" command in Yixin-Board).
 
 
 ## Acknowledgement

@@ -91,7 +91,12 @@ static int options_parse_openings(int argc, const char **argv, int i, Options *o
 
         if ((tail = str_prefix(argv[i], "file=")))
             str_cpy_c(&o->openings, tail);
-        else if ((tail = str_prefix(argv[i], "order="))) {
+        else if ((tail = str_prefix(argv[i], "type="))) {
+            if (!strcmp(tail, "pos"))
+                o->openingType = OPENING_POS;
+            else if (strcmp(tail, "offset"))
+                DIE("Invalid type for -openings: '%s'\n", tail);
+        } else if ((tail = str_prefix(argv[i], "order="))) {
             if (!strcmp(tail, "random"))
                 o->random = true;
             else if (strcmp(tail, "sequential"))
@@ -313,9 +318,19 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
 
 void options_print(Options *o, EngineOptions **eo) {
 
+    auto openingTypeName = [](OpeningType optype) {
+        switch (optype) {
+        case OPENING_OFFSET: return "offset";
+        case OPENING_POS: return "pos";
+        default: return "";
+        }
+    };
+
     std::cout << "---------------------------" << std::endl;
     std::cout << "Global Options:" << std::endl;
     std::cout << "openings = " << o->openings.buf << std::endl;
+    if (o->openings.len)
+        std::cout << "openingType = " << openingTypeName(o->openingType) << std::endl;
     std::cout << "boardSize = " << o->boardSize << std::endl;
     std::cout << "gameRule = " << o->gameRule << std::endl;
     std::cout << "pgn = " << o->pgn.buf << std::endl;

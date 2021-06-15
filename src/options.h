@@ -29,11 +29,11 @@ typedef struct {
     int resignCount, resignScore;
     int drawCount, drawScore;
     int forceDrawAfter;
-    bool log, random, repeat, sprt, gauntlet, useTURN;
-    char pad[2];
+    bool log, random, repeat, sprt, gauntlet, useTURN, debug;
+    char pad[1];
     int boardSize;
     int gameRule;
-    bool debug;
+    OpeningType openingType;
 } Options;
 
 typedef struct {

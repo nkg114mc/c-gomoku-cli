@@ -76,7 +76,7 @@ bool Game::game_load_fen(str_t *fen, int *color, const Options *o)
     Position p0(o->boardSize);
     vec_push(pos, p0, Position);
 
-    if (pos[0].apply_openning_plaintext(*fen)) {
+    if (pos[0].apply_opening(*fen, o->openingType)) {
         *color = pos[0].get_turn();
         return true;
     } else {

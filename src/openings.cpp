@@ -87,10 +87,10 @@ void Openings::openings_next(str_t *fen, size_t idx, int threadId)
 
     str_cpy(fen, line);
 
-    assert(openings_validate_opening_str(*fen));
+    //assert(openings_validate_opening_str(*fen));
 }
 
-
+/*
 bool Openings::openings_validate_opening_str(str_t &line) {
 
     std::stringstream ss;
@@ -128,3 +128,4 @@ bool Openings::openings_validate_opening_str(str_t &line) {
     }
     return true;
 }
+*/

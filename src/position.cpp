@@ -385,11 +385,18 @@ std::string Position::move_to_gomostr(move_t move) const {
     return ss.str();
 }
 
-// apply the openning str in the format of plain
-bool Position::apply_openning_plaintext(str_t &opening_str) {
-
+// apply the openning str in the specific format
+bool Position::apply_opening(str_t &opening_str, OpeningType type) {
     std::vector<Pos> openning_pos;
-    bool parsingOk = parse_openning_line_str(openning_pos, opening_str, this->boardSize);
+    bool parsingOk = false;
+    switch (type) {
+    case OPENING_OFFSET:
+        parsingOk = parse_opening_offset_linestr(openning_pos, opening_str);
+        break;
+    case OPENING_POS:
+        parsingOk = parse_opening_pos_linestr(openning_pos, opening_str);
+        break;
+    }
     if (!parsingOk) {
         return false;
     }
@@ -402,17 +409,20 @@ bool Position::apply_openning_plaintext(str_t &opening_str) {
     return true;
 }
 
-bool Position::parse_openning_line_str(std::vector<Pos> &openning_pos, str_t &linestr, int boardSz) {
-    openning_pos.clear();
-    int hboardSize = boardSz / 2;
+bool Position::parse_opening_offset_linestr(std::vector<Pos> &opening_pos, str_t &linestr) {
+    opening_pos.clear();
+    int hboardSize = this->boardSize / 2;
 
     std::stringstream ss;
     for (int i = 0; i < linestr.len; i++) {
         char ch = linestr.buf[i];
         if ((ch <= '9' && ch >= '0') || ch == '-') {
             ss << ch;
-        } else {
+        } else if (ch == ',' || ch == ' ') {
             ss << ' '; 
+        } else {
+            printf("Can not apply openning, unknown coordinate '%c'.\n", ch);
+            return false;
         }
     }
 
@@ -424,25 +434,65 @@ bool Position::parse_openning_line_str(std::vector<Pos> &openning_pos, str_t &li
     while (ss >> ofst) {
         if (ofst != -9999) {
             if (ofst >= -16 && ofst <= 15) {
-                buff[cnt] = ofst;
-                cnt++;
+                buff[cnt++] = ofst;
                 if (cnt == 2) {
                     int currx = buff[0] + hboardSize;
                     int curry = buff[1] + hboardSize;
                     if (!isInBoardXY(currx, curry)) {
-                        printf("Can not apply openning, the current board is too small.");
+                        printf("Can not apply openning, the current board is too small.\n");
                         return false;
                     }
-                    assert(isInBoardXY(currx, curry));
                     
                     Pos p = POS(currx, curry);
-                    openning_pos.push_back(p);
+                    opening_pos.push_back(p);
 
                     cnt = 0;
                 }
             }
         }
         ofst = -9999;
+    }
+
+    return true; // ok
+}
+
+bool Position::parse_opening_pos_linestr(std::vector<Pos> &opening_pos, str_t &linestr) {
+    opening_pos.clear();
+
+    std::stringstream ss;
+    for (int i = 0; i < linestr.len; i++) {
+        char ch = linestr.buf[i];
+
+        if (ch >= 'a' && ch <= 'z') {
+            ss << ' ' << int(ch - 'a') << ' ';
+        } else if (ch >= '0' && ch <= '9') {
+            ss << ch;
+        } else {
+            printf("Can not apply openning, unknown coordinate '%c'.\n", ch);
+            return false;
+        }
+    }
+
+    int cnt = 0;
+    int buff[3];
+    int coord = -9999;
+    while (ss >> coord) {
+        if (coord != -9999) {
+            buff[cnt++] = coord;
+            if (cnt == 2) {
+                int currx = buff[0];
+                int curry = buff[1] - 1;
+                if (!isInBoardXY(currx, curry)) {
+                    printf("Can not apply openning, the current board is too small.\n");
+                    return false;
+                }
+                
+                Pos p = POS(currx, curry);
+                opening_pos.push_back(p);
+                cnt = 0;
+            }
+        }
+        coord = -9999;
     }
 
     return true; // ok
