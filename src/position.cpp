@@ -24,40 +24,23 @@
 #include "position.h"
 #include "util.h"
 
-const uint16_t POS_MASK = 0x03FF;
-
-inline Pos POS_R(uint8_t x = 0, uint8_t y = 0) { return (x << MAX_BOARD_SIZE_BIT) + y; }
-inline Pos POS(uint8_t x = 0, uint8_t y = 0) { return POS_R(x + BOARD_BOUNDARY, y + BOARD_BOUNDARY); }
-inline uint8_t CoordX(Pos p) { return (p >> MAX_BOARD_SIZE_BIT) - BOARD_BOUNDARY; }
-inline uint8_t CoordY(Pos p) { return (p & ((1 << MAX_BOARD_SIZE_BIT) - 1)) - BOARD_BOUNDARY; }
-inline int getXFromMove(move_t move) { return CoordX(getPosFromMove(move)); }
-inline int getYFromMove(move_t move) { return CoordY(getPosFromMove(move)); }
-Pos getPosFromMove(move_t move) { return (Pos)(move & POS_MASK); }
-Color getColorFromMove(move_t move) { return (Color)(move >> 10); }
-
 inline move_t buildMove(int x, int y, Color side) { 
     assert(side == WHITE || side == BLACK);
     Pos p = POS(x, y);
     move_t m = (side << 10) | p;
     return m;
 }
-inline move_t buildMoveReal(int x, int y, Color side) {
-    assert(side == WHITE || side == BLACK);
-    Pos preal = POS_R(x, y);
-    move_t m = (side << 10) | preal;
-    return m;
-}
+
 inline move_t buildMovePos(Pos p, Color side) { 
     assert(side == WHITE || side == BLACK);
     move_t m = (side << 10) | p;
     return m;
 }
 
-Color OPPSITE_COLOR[4] = {
-	WHITE, BLACK, EMPTY, WALL
-};
-
-Color opponent_color(Color c) {
+inline Color opponent_color(Color c) {
+    static const Color OPPSITE_COLOR[4] = {
+        WHITE, BLACK, EMPTY, WALL
+    };
 	return OPPSITE_COLOR[c];
 }
 
@@ -79,16 +62,12 @@ void Position::clear() {
     initBoard(oldSize);
 }
 
-Position::Position() {
-	initBoard(15);
-}
-
 Position::Position(int bSize) {
 	initBoard(bSize);
 }
 
 void Position::move(move_t m) {
-    Pos pos = getPosFromMove(m);
+    Pos pos = PosFromMove(m);
 	setPiece(pos, playerToMove);
 	historyMoves[moveCount] = m;
 	playerToMove = opponent_color(playerToMove);
@@ -99,7 +78,7 @@ void Position::move(move_t m) {
 void Position::undo() {
 	assert(moveCount > 0);
 	moveCount--;
-    Pos lastPos = getPosFromMove(historyMoves[moveCount]);
+    Pos lastPos = PosFromMove(historyMoves[moveCount]);
 	delPiece(lastPos);
     key ^= zobristTurn[playerToMove];
 	playerToMove = opponent_color(playerToMove);
@@ -165,27 +144,19 @@ bool Position::isInBoard(Pos pos) const {
 }
 
 bool Position::isInBoardXY(int x, int y) const {
-	if ((x >= 0 && x < boardSize) && 
-        (y >= 0 && y < boardSize)) {
-        return true;
-    }
-	return false;
+    return (x >= 0 && x < boardSize) && (y >= 0 && y < boardSize);
 }
 
 bool Position::is_legal_move(move_t move) const {
-    Pos movePos = getPosFromMove(move);
-    Color moveSide = getColorFromMove(move);
+    Pos movePos = PosFromMove(move);
 
-    if (isInBoard(movePos)) {
-        if (board[movePos] == EMPTY) {
-            return true;
-        }
+    if (isInBoard(movePos) && board[movePos] == EMPTY) {
+        return true;
+    } else {
+        // std::cout << board[movePos] << std::endl;
+        // std::cout << CoordX(movePos) << " " << CoordY(movePos) << std::endl;
+        return false; // not ok
     }
-
-    std::cout << board[movePos] << std::endl;
-    std::cout << getPosX(movePos) << " " << getPosY(movePos) << std::endl;
-    
-    return false; // not ok
 }
 
 void Position::compute_forbidden_moves(std::vector<move_t> &forbidden_moves) const {
@@ -307,7 +278,7 @@ bool Position::check_five_in_line_lastmove(bool allow_long_connection) { // cons
     if (moveCount < 5) {
         return false;
     }
-    Pos lastPos = getPosFromMove(historyMoves[moveCount - 1]);
+    Pos lastPos = PosFromMove(historyMoves[moveCount - 1]);
     Color lastPiece = board[lastPos];
     return check_five_in_line_side(lastPiece, allow_long_connection);
 }
@@ -378,8 +349,8 @@ bool Position::is_valid_move_gomostr(char *move_str) {
 
 
 std::string Position::move_to_gomostr(move_t move) const {
-    int x = getXFromMove(move);
-    int y = getYFromMove(move);
+    int x = CoordX(PosFromMove(move));
+    int y = CoordY(PosFromMove(move));
     std::stringstream ss("");
     ss << x << "," << y;
     return ss.str();
@@ -502,14 +473,6 @@ bool Position::parse_opening_pos_linestr(std::vector<Pos> &opening_pos, str_t &l
 void Position::pos_move_with_copy(Position *after, const Position *before, move_t m) {
     memcpy(after, before, sizeof(Position));
     after->move(m);
-}
-
-int Position::getPosX(Pos p) {
-    return (int)CoordX(p);
-}
-
-int Position::getPosY(Pos p) {
-    return (int)CoordY(p);
 }
 
 

@@ -54,13 +54,7 @@ public:
 	static const int MaxBoardSizeSqr = MaxBoardSize * MaxBoardSize;
 	static const int RealBoardSize = MaxBoardSize - 2 * BOARD_BOUNDARY;
 
-    Position(int bSize);
-    Position();
-
-/*
-    bool pos_set(Position *pos, const char *fen, bool force960, bool *sfen);
-    void pos_get(const Position *pos, str_t *fen, bool sfen);
-*/
+    Position(int bSize = 15);
 
     inline Color get_turn() { return playerToMove; }
     inline int get_move_count() { return moveCount; }
@@ -74,7 +68,6 @@ public:
     std::string move_to_gomostr(move_t move) const;
 
     void clear();
-    void initBoard(int size);
     void pos_print() const;
 
     bool is_legal_move(move_t move) const;
@@ -89,26 +82,24 @@ public:
     // static methods
     static void pos_move_with_copy(Position *after, const Position *before, move_t m);
     static bool is_valid_move_gomostr(char *move_str);
-    static int getPosX(Pos p);
-    static int getPosY(Pos p);
 
 private:
 	Color board[MaxBoardSizeSqr];
 	int boardSize;
 	int boardSizeSqr;
-	int moveCount = 0;
+	int moveCount;
 	move_t historyMoves[MaxBoardSizeSqr];
-    //move_t lastMove;  // last move played
-	Color playerToMove = BLACK;
+	Color playerToMove;
     uint64_t key;
+    int winConnectionLen;
+    Pos winConnectionPos[32];
 
+    void initBoard(int size);
 	void setPiece(Pos pos, Color piece);
 	void delPiece(Pos pos);
     bool isInBoard(Pos pos) const;
     bool isInBoardXY(int x, int y) const;
 
-    int winConnectionLen;
-    Pos winConnectionPos[32];
     void check_five_helper(bool allow_long_connc, int &conCnt, int & fiveCnt, Pos* connectionLine);
     bool parse_opening_offset_linestr(std::vector<Pos> &opening_pos, str_t &linestr);
     bool parse_opening_pos_linestr(std::vector<Pos> &opening_pos, str_t &linestr);
@@ -121,8 +112,12 @@ inline Color oppositeColor(Color color)
     return (Color)(c ^ 0x1);  // branchless for: color == WHITE ? BLACK : WHITE
 }
 
-extern Pos getPosFromMove(move_t move);
-extern Color getColorFromMove(move_t move);
+inline Pos     POS_RAW(uint8_t x = 0, uint8_t y = 0) { return (x << MAX_BOARD_SIZE_BIT) + y; }
+inline Pos     POS(uint8_t x = 0, uint8_t y = 0) { return POS_RAW(x + BOARD_BOUNDARY, y + BOARD_BOUNDARY); }
+inline uint8_t CoordX(Pos p) { return (p >> MAX_BOARD_SIZE_BIT) - BOARD_BOUNDARY; }
+inline uint8_t CoordY(Pos p) { return (p & ((1 << MAX_BOARD_SIZE_BIT) - 1)) - BOARD_BOUNDARY; }
+inline Pos     PosFromMove(move_t move) { return (Pos)(move & 0x03FF); }
+inline Color   ColorFromMove(move_t move) { return (Color)(move >> 10); }
 
 extern uint64_t zobristPc[4][Position::MaxBoardSizeSqr];
 extern uint64_t zobristTurn[4];

@@ -172,19 +172,17 @@ void Game::send_board_command(Position *pos, Worker *w, Engine *engine)
     move_t *histMoves = pos->get_hist_moves();
 
     // make sure last color is 2 according to piskvork protocol
-    auto colorToGomocupStoneIdx = [lastColor = getColorFromMove(histMoves[moveCnt-1])](Color c) {
+    auto colorToGomocupStoneIdx = [lastColor = ColorFromMove(histMoves[moveCnt-1])](Color c) {
         return c == lastColor ? 2 : 1;
     };
 
     for (int i = 0; i < moveCnt; i++) {
-        Color color = getColorFromMove(histMoves[i]);
+        Color color = ColorFromMove(histMoves[i]);
         int gomocupColorIdx = colorToGomocupStoneIdx(color);
-        Pos p = getPosFromMove(histMoves[i]);
-        int x = Position::getPosX(p);
-        int y = Position::getPosY(p);
+        Pos p = PosFromMove(histMoves[i]);
         scope(str_destroy) str_t cmd = str_init();
         str_cpy_c(&cmd, "");
-        str_cat_fmt(&cmd, "%i,%i,%i", x, y, gomocupColorIdx);
+        str_cat_fmt(&cmd, "%i,%i,%i", CoordX(p), CoordY(p), gomocupColorIdx);
         engine->engine_writeln(w, cmd.buf);
     }
 
@@ -278,11 +276,8 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
             canUseTurn[ei] = true;
         } else {
             if (o->useTURN && canUseTurn[ei]) { // use TURN to trigger think
-                Pos p = getPosFromMove(played);
-                int x = Position::getPosX(p);
-                int y = Position::getPosY(p);
                 str_cpy_c(&cmd, "");
-                str_cat_fmt(&cmd, "TURN %i,%i", x, y);
+                str_cat_fmt(&cmd, "TURN %s", pos[ply].move_to_gomostr(played).c_str());
                 engines[ei].engine_writeln(w, cmd.buf);
             } else { // use BOARD to trigger think
                 send_board_command(&(pos[ply]), w, &(engines[ei]));
@@ -504,12 +499,12 @@ void Game::game_export_sgf(size_t gameIdx, str_t *out)
         }
         str_push(out, ';');
     
-        Color color = getColorFromMove(histMove[j]);
-        Pos p = getPosFromMove(histMove[j]);
+        Color color = ColorFromMove(histMove[j]);
+        Pos p = PosFromMove(histMove[j]);
     
         char coord[3];
-        coord[0] = (char)(Position::getPosX(p) + 'a');
-        coord[1] = (char)(Position::getPosY(p) + 'a');
+        coord[0] = (char)(CoordX(p) + 'a');
+        coord[1] = (char)(CoordY(p) + 'a');
         coord[2] = '\0';
         if (color == BLACK) {
             str_cat_fmt(out, "B[%s]", coord);
