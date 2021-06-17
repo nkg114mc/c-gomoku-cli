@@ -161,7 +161,7 @@ void Game::send_board_command(Position *pos, Worker *w, Engine *engine)
     engine->engine_writeln(w, "BOARD");
 
     int moveCnt = pos->get_move_count();
-    move_t *histMoves = pos->get_hist_moves();
+    const move_t *histMoves = pos->get_hist_moves();
 
     // make sure last color is 2 according to piskvork protocol
     auto colorToGomocupStoneIdx = [lastColor = ColorFromMove(histMoves[moveCnt-1])](Color c) {
@@ -476,7 +476,7 @@ void Game::game_export_sgf(size_t gameIdx, str_t *out)
 
     // played moves
     int moveCnt = 0;
-    move_t* histMove = lastPos->get_hist_moves();
+    const move_t* histMove = lastPos->get_hist_moves();
     for (int j = 0; j < lastPos->get_move_count(); j++) {
         int thinkPly = j - openingMoveCnt;
         if (openingMoveCnt > 0 && thinkPly == 0) {

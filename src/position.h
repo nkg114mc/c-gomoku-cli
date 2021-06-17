@@ -56,10 +56,10 @@ public:
 
     Position(int bSize = 15);
 
-    inline Color get_turn() { return playerToMove; }
-    inline int get_move_count() { return moveCount; }
-    inline int get_moves_left() { return boardSizeSqr - moveCount; }
-    inline move_t* get_hist_moves() { return historyMoves; }
+    inline Color get_turn() const { return playerToMove; }
+    inline int get_move_count() const { return moveCount; }
+    inline int get_moves_left() const { return boardSizeSqr - moveCount; }
+    inline const move_t* get_hist_moves() const { return historyMoves; }
 
     void move(move_t m);
     void undo();
@@ -78,6 +78,7 @@ public:
 
     // about opening
     bool apply_opening(str_t &opening_str, OpeningType type);
+    std::string to_opening_str(OpeningType type) const;
 
     // static methods
     static void pos_move_with_copy(Position *after, const Position *before, move_t m);

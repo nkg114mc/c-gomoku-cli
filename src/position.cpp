@@ -485,6 +485,31 @@ bool Position::parse_opening_pos_linestr(std::vector<Pos> &opening_pos, str_t &l
     return true; // ok
 }
 
+// convert a position back to opening string (assuming current position is
+// a normal position, played by black and white alternately)
+std::string Position::to_opening_str(OpeningType type) const {
+    std::stringstream ss;
+    int hboardSize = this->boardSize / 2;
+
+    switch (type) {
+    case OPENING_OFFSET:
+        for (int i = 0; i < get_move_count(); i++) {
+            Pos p = PosFromMove(get_hist_moves()[i]);
+            if (i) ss << ", ";
+            ss << (CoordX(p) - hboardSize) << "," << (CoordY(p) - hboardSize);
+        }
+        break;
+    case OPENING_POS:
+        for (int i = 0; i < get_move_count(); i++) {
+            Pos p = PosFromMove(get_hist_moves()[i]);
+            ss << char(CoordX(p) + 'a') << int(CoordY(p) + 1);
+        }
+        break;
+    }
+
+    return ss.str();
+}
+
 // this is a static method
 void Position::pos_move_with_copy(Position *after, const Position *before, move_t m) {
     memcpy(after, before, sizeof(Position));
