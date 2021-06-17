@@ -305,6 +305,11 @@ void Engine::engine_wait_for_ok(Worker *w)
 
     do {
         engine_readln(w, &line);
+
+        const char *tail = str_prefix(line.buf, "ERROR");
+        if (tail != NULL) { // an ERROR
+            DIE("Engine[%s] output error:%s\n", this->name.buf, tail);
+        }
     } while (strcmp(line.buf, "OK"));
     w->deadline_clear();
 }
