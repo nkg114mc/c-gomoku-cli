@@ -151,6 +151,36 @@ static int options_parse_sprt(int argc, const char **argv, int i, Options *o)
     return i - 1;
 }
 
+static int options_parse_sample(int argc, const char **argv, int i, Options *o)
+{
+    while (i < argc && argv[i][0] != '-') {
+        const char *tail = NULL;
+
+        if ((tail = str_prefix(argv[i], "freq=")))
+            o->sp.freq = atof(tail);
+        else if ((tail = str_prefix(argv[i], "file=")))
+            str_cpy_c(&o->sp.fileName, tail);
+        else if ((tail = str_prefix(argv[i], "format="))) {
+            if (!strcmp(tail, "csv"))
+                o->sp.bin = false;
+            else if (!strcmp(tail, "bin"))
+                o->sp.bin = true;
+            else if (!strcmp(tail, "bin_lz4"))
+                o->sp.bin = o->sp.compress = true;
+            else
+                DIE("Illegal format in -sample: '%s'\n", tail);
+        } else
+            DIE("Illegal token in -sample: '%s'\n", argv[i]);
+
+        i++;
+    }
+
+    if (!o->sp.fileName.len)
+        str_cpy_fmt(&o->sp.fileName, "sample.%s", o->sp.bin ? (o->sp.compress ? "bin.lz4" : "bin") : "csv");
+
+    return i - 1;
+}
+
 static void check_rule_code(GameRule gr) {
     bool supported = false;
     for (int i = 0; i < RULES_COUNT; i++) {
@@ -199,6 +229,7 @@ Options options_init(void)
     o.pgn = str_init();
     o.sgf = str_init();
     o.msg = str_init();
+    o.sp = SampleParams { .fileName = str_init(), .freq = 1.0 };
 
     // non-zero default values
     o.concurrency = 1;
@@ -254,6 +285,8 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
             o->forceDrawAfter = atoi(argv[++i]);
         else if (!strcmp(argv[i], "-sprt"))
             i = options_parse_sprt(argc, argv, i + 1, o);
+        else if (!strcmp(argv[i], "-sample"))
+            i = options_parse_sample(argc, argv, i + 1, o);
         else if (!strcmp(argv[i], "-rule")) {
             o->gameRule = (GameRule)(atoi(argv[i + 1]));
             i++;

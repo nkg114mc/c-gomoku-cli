@@ -62,6 +62,7 @@ c-gomoku-cli -each tc=180/30 \
  * `pgn FILE`: Save a dummy game to `FILE`, in PGN format. PGN format is for chess games. We replace the moves with some random chess moves but only keep the game result and player names. This dummy PGN file can be input by [BayesianElo](https://www.remi-coulom.fr/Bayesian-Elo/) to compute ELO scores.
  * `sgf FILE`: Save a game to `FILE`, in SGF format.
  * `msg FILE`: Save engine messages to `FILE`, in TXT format. Messages in each games are grouped by game index.
+ * `sample`. See below.
 
 ### Engine Options
 
@@ -117,6 +118,38 @@ b7d6e6f7h2k5
 ```
 
 This notation is common among many Gomoku/Renju applications. (For example, you can acquire a pos notation text by using "getpos" command in Yixin-Board).
+
+###Sampling (advanced)
+
+Sampling is used to record various position and engine outputs in a game, as well as the final game result. These can be used as training data, which can be used to fit the parameters of a chess engine evaluation, otherwise known as supervised learning. Sample record is usually in binary format easy for engine to process, meanwhile a human readable and easily parsable CSV file can also be generated. Note that only game which result is not "win by time forfeit" or "win by opponent illegal move" will be recorded.
+
+Syntax is `-sample [freq=%f] [format=csv|bin|bin_lz4] [file=%s] `. Example `-sample freq=0.25 format=csv file=out.csv `.
+
++ `freq` is the sampling frequency (floating point number between `0` and `1`). Defaults to `1` if omitted.
++ `file` is the name of the file where samples are written. Defaults to `sample.[csv|bin|bin.lz4]` if omitted.
++ `format` is the format in which the file is written. Defaults to `csv`, which is human readable: `Pos,Move,Result`. `Pos` is the position in "pos" notation. `Move` is the move in "pos" notation output by the engine. Values for `Result` are `0=loss`, `1=draw`, `2=win`. For binary format `bin` see the section below for details. `bin_lz4` is the same as `bin` format, but the whole file stream is compressed using [LZ4](https://github.com/lz4/lz4) to save disk space (This is suitable for huge training dataset containing millions of positions). Engines are recommended to use LZ4 "Auto Framing" API ([example](https://github.com/lz4/lz4/blob/4f0c7e45c54b7b7e42c16defb764a01129d4a0a8/examples/frameCompress.c#L171)) to decompress the training data.
+
+#### Binary format
+
+Binary format uses variable length encoding show below, which is easy to parse for engines. Each entry has a length of `4+ply` bytes. Position is represented by a move sequence that black plays first. Note that move sequence is always the same as the actual game records, since in Renju rule we need proper move order to find forbidden points.
+
+```c++
+struct Entry {
+    uint16_t boardsize : 5;	// board size
+	uint16_t ply : 9;		// current number of stones on board
+    uint16_t result : 2;	// final game result: 0=loss, 1=draw, 2=win
+    uint16_t move;			// move output by the engine
+    uint16_t position[ply];	// move sequence that representing a position
+};
+```
+
+Each move is represented by a 16bit unsigned integer, constructed using two index `x` and `y` using `uint16_t move = (x << 5) | y;`. Below is a code snippet that does transform between move and coordinate.
+
+```c
+uint16_t Move(int x, int y)    { return (x << 5) | y; }
+int      CoordX(uint16_t move) { return (move >> 5); }
+int      CoordY(uint16_t move) { return (move & ((1 << 5) - 1)); }
+```
 
 
 ## Acknowledgement

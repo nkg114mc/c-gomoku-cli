@@ -21,7 +21,14 @@
 #include "str.h"
 #include "position.h"
 
-typedef struct {
+struct SampleParams {
+    str_t fileName;
+    double freq;
+    bool bin, compress;
+    char pad[2];
+};
+
+struct Options {
     str_t openings, pgn, sgf, msg;
     SPRTParam sprtParam;
     uint64_t srand;
@@ -34,14 +41,15 @@ typedef struct {
     int boardSize;
     int gameRule;
     OpeningType openingType;
-} Options;
+    SampleParams sp;
+};
 
-typedef struct {
+struct EngineOptions {
     str_t cmd, name, *options;
     int64_t timeoutTurn, timeoutMatch, increment, nodes;
     int depth, numThreads;
     int64_t maxMemory;
-} EngineOptions;
+};
 
 EngineOptions engine_options_init(void);
 void engine_options_destroy(EngineOptions *eo);

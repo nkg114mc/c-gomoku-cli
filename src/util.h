@@ -51,9 +51,13 @@ void system_sleep(int64_t msec);
 #ifdef __linux__
     #define FOPEN_READ_MODE "re"
     #define FOPEN_WRITE_MODE "we"
+    #define FOPEN_WRITE_BINARY_MODE "we"
     #define FOPEN_APPEND_MODE "ae"
+    #define FOPEN_APPEND_BINARY_MODE "ae"
 #else
     #define FOPEN_READ_MODE "r"
     #define FOPEN_WRITE_MODE "w"
+    #define FOPEN_WRITE_BINARY_MODE "wb"
     #define FOPEN_APPEND_MODE "a"
+    #define FOPEN_APPEND_BINARY_MODE "ab"
 #endif

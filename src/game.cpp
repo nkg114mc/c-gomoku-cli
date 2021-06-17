@@ -328,6 +328,18 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
             resignCount[ei] = 0;
         }
 
+        // Write sample: position (compactly encoded) + move
+        if (o->sp.fileName.len && prngf(&w->seed) <= o->sp.freq) {
+            Sample sample = {
+                .pos = pos[ply],
+                .move = played,
+                .result = NB_RESULT  // mark as invalid for now, computed after the game
+            };
+
+            // Record sample.
+            vec_push(samples, sample, Sample);
+        }
+
         vec_push(pos, (Position){0}, Position);
     }
 
@@ -338,12 +350,20 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         ? (pos[ply].get_turn() == BLACK ? RESULT_LOSS : RESULT_WIN)  // lost from turn's pov
         : RESULT_DRAW;
 
+    // Fill results in samples
+    if (state == STATE_TIME_LOSS || state == STATE_ILLEGAL_MOVE) {
+        vec_clear(samples); // discard samples in a time loss/illegal move game
+    } else {
+        for (size_t i = 0; i < vec_size(samples); i++)
+            samples[i].result = samples[i].pos.get_turn() == WHITE ? wpov : 2 - wpov;
+    }
+
     return state < STATE_SEPARATOR
         ? (ei == 0 ? RESULT_LOSS : RESULT_WIN)  // engine on the move has lost
         : RESULT_DRAW;
 }
 
-void Game::game_decode_state(str_t *result, str_t *reason, const char* restxt[3])
+void Game::game_decode_state(str_t *result, str_t *reason, const char* restxt[3]) const
 {
     const char* DefaultResultTxt[3] = {
         "0-1", "1/2-1/2", "1-0"
@@ -389,8 +409,7 @@ void Game::game_decode_state(str_t *result, str_t *reason, const char* restxt[3]
         assert(false);
 }
 
-
-void Game::game_export_pgn(size_t gameIdx, int verbosity, str_t *out)
+void Game::game_export_pgn(size_t gameIdx, int verbosity, str_t *out) const
 {
     // Record game id as event name for each game
     str_cat_fmt(out, "[Event \"%I\"]\n", gameIdx);
@@ -435,7 +454,7 @@ void Game::game_export_pgn(size_t gameIdx, int verbosity, str_t *out)
     str_cat_c(str_cat(out, result), "\n\n");
 }
 
-void Game::game_export_sgf(size_t gameIdx, str_t *out)
+void Game::game_export_sgf(size_t gameIdx, str_t *out) const
 {
     const int movePerline = 8;
 
@@ -515,4 +534,58 @@ void Game::game_export_sgf(size_t gameIdx, str_t *out)
     }
 
     str_cat_c(out, ")\n\n");
+}
+
+void Game::game_export_samples_csv(FILE *out) const
+{
+    for (size_t i = 0; i < vec_size(samples); i++) {
+        std::string pos_str = samples[i].pos.to_opening_str(OPENING_POS);
+        std::string move_str = samples[i].pos.move_to_opening_str(samples[i].move, OPENING_POS);
+        fprintf(out, "%s,%s,%d\n", pos_str.c_str(), move_str.c_str(), samples[i].result);
+    }
+}
+
+void Game::game_export_samples_bin(FILE *out, LZ4F_compressionContext_t lz4Ctx) const
+{
+    struct Entry {
+        struct EntryHead {
+            uint16_t boardsize : 5;	// board size
+            uint16_t ply : 9;		// current number of stones on board
+            uint16_t result : 2;	// final game result: 0=loss, 1=draw, 2=win
+            uint16_t move;			// move output by the engine
+        } head;
+        uint16_t position[1024];	// move sequence that representing a position
+    } e;
+    const size_t bufSize = LZ4F_compressBound(sizeof(Entry), nullptr);
+    char buf[bufSize];
+
+    for (size_t i = 0; i < vec_size(samples); i++) {
+        int ply = samples[i].pos.get_move_count();
+        const move_t *hist_moves = samples[i].pos.get_hist_moves();
+        assert(ply < 1024);
+        
+        e.head.boardsize = samples[i].pos.get_size();
+        e.head.ply = ply;
+        e.head.result = samples[i].result;
+        e.head.move = samples[i].move;
+        for (int iMove = 0; iMove < ply; iMove++) {
+            e.position[iMove] = PosFromMove(hist_moves[iMove]);
+        }
+
+        const size_t entrySize = sizeof(Entry::EntryHead) + sizeof(uint16_t) * ply;
+        if (lz4Ctx) {
+            size_t size = LZ4F_compressUpdate(lz4Ctx, buf, bufSize, &e, entrySize, nullptr);
+            fwrite(buf, size, 1, out);
+        } else {
+            fwrite(&e, entrySize, 1, out);
+        }
+    }
+}
+
+void Game::game_export_samples(FILE *out, bool bin, LZ4F_compressionContext_t lz4Ctx) const
+{
+    if (bin)
+        game_export_samples_bin(out, lz4Ctx);
+    else
+        game_export_samples_csv(out);
 }

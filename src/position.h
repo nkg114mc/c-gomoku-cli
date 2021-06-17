@@ -56,6 +56,7 @@ public:
 
     Position(int bSize = 15);
 
+    inline int get_size() const { return boardSize; }
     inline Color get_turn() const { return playerToMove; }
     inline int get_move_count() const { return moveCount; }
     inline int get_moves_left() const { return boardSizeSqr - moveCount; }
@@ -66,6 +67,7 @@ public:
 
     move_t gomostr_to_move(char *move_str) const;
     std::string move_to_gomostr(move_t move) const;
+    std::string move_to_opening_str(move_t move, OpeningType type) const;
 
     void clear();
     void pos_print() const;

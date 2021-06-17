@@ -372,6 +372,23 @@ std::string Position::move_to_gomostr(move_t move) const {
     return ss.str();
 }
 
+std::string Position::move_to_opening_str(move_t move, OpeningType type) const {
+    std::stringstream ss;
+    int hboardSize = this->boardSize / 2;
+    Pos p = PosFromMove(move);
+
+    switch (type) {
+    case OPENING_OFFSET:
+        ss << (CoordX(p) - hboardSize) << "," << (CoordY(p) - hboardSize);
+        break;
+    case OPENING_POS:
+        ss << char(CoordX(p) + 'a') << int(CoordY(p) + 1);
+        break;
+    }
+
+    return ss.str();
+}
+
 // apply the openning str in the specific format
 bool Position::apply_opening(str_t &opening_str, OpeningType type) {
     std::vector<Pos> openning_pos;

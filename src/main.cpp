@@ -28,6 +28,7 @@
 #include "util.h"
 #include "vec.h"
 #include "workers.h"
+#include "extern/lz4frame.h"
 
 static Options options;
 static EngineOptions *eo;
@@ -35,6 +36,9 @@ static Openings openings;
 static SeqWriter pgnSeqWriter;
 static SeqWriter sgfSeqWriter;
 static SeqWriter msgSeqWriter;
+static FILE *sampleFile;
+static LZ4F_compressionContext_t sampleFileLz4Ctx;
+static pthread_mutex_t sampleFileMtx;
 static JobQueue jq;
 
 static void main_destroy(void)
@@ -43,6 +47,18 @@ static void main_destroy(void)
         Workers[i].worker_destroy();
     }
     Workers.clear();
+
+    if (options.sp.fileName.len) {
+        if (options.sp.compress) {
+            // Flush LZ4 tails and release LZ4 context
+            const size_t bufSize = LZ4F_compressBound(0, nullptr);
+            char buf[bufSize];
+            size_t size = LZ4F_compressEnd(sampleFileLz4Ctx, buf, bufSize, nullptr);
+            fwrite(buf, 1, size, sampleFile);
+            LZ4F_freeCompressionContext(sampleFileLz4Ctx);
+        }
+        fclose(sampleFile);
+    }
 
     if (options.pgn.len)
         pgnSeqWriter.seq_writer_destroy();
@@ -80,6 +96,21 @@ static void main_init(int argc, const char **argv)
 
     if (options.msg.len)
         msgSeqWriter.seq_writer_init(options.msg.buf, FOPEN_APPEND_MODE);
+
+    if (options.sp.fileName.len) {
+        if (options.sp.compress) {
+            DIE_IF(0, !(sampleFile = fopen(options.sp.fileName.buf, FOPEN_WRITE_BINARY_MODE)));
+            // Init LZ4 context and write file headers
+            DIE_IF(0, LZ4F_isError(LZ4F_createCompressionContext(&sampleFileLz4Ctx, LZ4F_VERSION)));
+            char buf[LZ4F_HEADER_SIZE_MAX];
+            size_t headerSize = LZ4F_compressBegin(sampleFileLz4Ctx, buf, sizeof(buf), nullptr);
+            fwrite(buf, sizeof(char), headerSize, sampleFile);
+        } else if (options.sp.bin) {
+            DIE_IF(0, !(sampleFile = fopen(options.sp.fileName.buf, FOPEN_APPEND_BINARY_MODE)));
+        } else {
+            DIE_IF(0, !(sampleFile = fopen(options.sp.fileName.buf, FOPEN_APPEND_MODE)));
+        }
+    }
 
     // Prepare Workers[]
     for (int i = 0; i < options.concurrency; i++) {
@@ -169,6 +200,13 @@ static void *thread_start(void *arg)
         // Write engine messages to TXT file
         if (msg)
             msgSeqWriter.seq_writer_push(idx, messages);
+
+        // Write to Sample file
+        if (options.sp.fileName.len) {
+            pthread_mutex_lock(&sampleFileMtx); // lock sample file before writing
+            game.game_export_samples(sampleFile, options.sp.bin, sampleFileLz4Ctx);
+            pthread_mutex_unlock(&sampleFileMtx);
+        }
 
         // Write to stdout a one line summary of the game
         scope(str_destroy) str_t result = str_init(), reason = str_init();
