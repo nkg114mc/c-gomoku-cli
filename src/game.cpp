@@ -26,14 +26,17 @@
 #include "position.h"
 
 // Applies rules to generate legal moves, and determine the state of the game
-static int game_apply_rules(const Game *g, std::vector<move_t> forbidden_moves)
+static int game_apply_rules(const Game *g, move_t lastmove)
 {
     Position *pos = &g->pos[g->ply];
-    pos->compute_forbidden_moves(forbidden_moves);
 
     bool allow_long_connection = true;
-    if (g->game_rule == RENJU) {
+    if (g->game_rule == GOMOKU_EXACT_FIVE) {
         allow_long_connection = false;
+    }
+    else if (g->game_rule == RENJU) {
+        if (ColorFromMove(lastmove) == BLACK)
+            allow_long_connection = false;
     }
 
     if (pos->check_five_in_line_lastmove(allow_long_connection)) {
@@ -44,17 +47,6 @@ static int game_apply_rules(const Game *g, std::vector<move_t> forbidden_moves)
 
     // game does not end
     return STATE_NONE;
-}
-
-// moves are forbidden move, which are "bad move"s
-static bool forbidden_move(move_t move, const std::vector<move_t> moves)
-{
-    for (size_t i = 0; i < moves.size(); i++) {
-        if (moves[i] == move) {
-            return true; // is a forbidden move, not ok
-        }
-    }
-    return false; // ok
 }
 
 void Game::game_init(int rd, int gm)
@@ -243,8 +235,6 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
     // the starting position has been added at game_load_fen()
 
     for (ply = 0; ; ei = (1 - ei), ply++) {
-        std::vector<move_t> forbiddenMoves;
-
         if (played != NONE_MOVE) {
             Position::pos_move_with_copy(&pos[ply], &pos[ply - 1], played);
         }
@@ -253,7 +243,7 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
             pos[ply].pos_print();
         }
 
-        state = game_apply_rules(this, forbiddenMoves);
+        state = game_apply_rules(this, played);
         if (state > STATE_NONE) {
             break;
         }
@@ -302,14 +292,14 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
 
         played = pos[ply].gomostr_to_move(best.buf);
 
-        if (forbidden_move(played, forbiddenMoves)) {
-            state = STATE_FORBIDDEN_MOVE;
-            break;
-        }
-
         if (!pos[ply].is_legal_move(played)) {
             std::cout << "Illegal move: " << best.buf << std::endl;
             state = STATE_ILLEGAL_MOVE;
+            break;
+        }
+
+        if (game_rule == RENJU && pos[ply].is_forbidden_move(played)) {
+            state = STATE_FORBIDDEN_MOVE;
             break;
         }
 
@@ -339,7 +329,6 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         }
 
         vec_push(pos, (Position){0}, Position);
-        forbiddenMoves.clear();
     }
 
     assert(state != STATE_NONE);
@@ -385,7 +374,7 @@ void Game::game_decode_state(str_t *result, str_t *reason, const char* restxt[3]
     } else if (state == STATE_FORBIDDEN_MOVE) {
         assert(pos[ply].get_turn() == BLACK);
         str_cpy_c(result, restxt[RESULT_LOSS]);
-        str_cpy_c(reason, "black play on forbidden position");
+        str_cpy_c(reason, "Black play on forbidden position");
     } else if (state == STATE_DRAW_ADJUDICATION)
         str_cpy_c(reason, "Draw by adjudication");
     else if (state == STATE_RESIGN) {

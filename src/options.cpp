@@ -151,6 +151,19 @@ static int options_parse_sprt(int argc, const char **argv, int i, Options *o)
     return i - 1;
 }
 
+static void check_rule_code(GameRule gr) {
+    bool supported = false;
+    for (int i = 0; i < RULES_COUNT; i++) {
+        if (ALL_VALID_RULES[i] == gr) {
+            supported = true;
+            break;
+        }
+    }
+    if (!supported) {
+        DIE("Unspported game rule code '%i'!\n", gr);
+    }
+}
+
 EngineOptions engine_options_init(void)
 {
     EngineOptions eo = {0};
@@ -199,19 +212,6 @@ Options options_init(void)
     return o;
 }
 
-void check_rule_code(GameRule gr) {
-    bool supported = false;
-    for (int i = 0; i < RULES_COUNT; i++) {
-        if (ALL_VALID_RULES[i] == gr) {
-            supported = true;
-            break;
-        }
-    }
-    if (!supported) {
-        DIE("Unspported game rule code '%i'!\n", gr);
-    }
-}
-
 void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
 {
 
@@ -257,10 +257,11 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
         else if (!strcmp(argv[i], "-rule")) {
             o->gameRule = (GameRule)(atoi(argv[i + 1]));
             i++;
+            check_rule_code((GameRule)o->gameRule);
         } else if (!strcmp(argv[i], "-boardsize")) {
             o->boardSize = atoi(argv[i + 1]);
-            if (o->boardSize < 5 || o->boardSize > 25) {
-                DIE("Only support board size of 5 ~ 25\n");
+            if (o->boardSize < 5 || o->boardSize > 22) {
+                DIE("Only support board size of 5 ~ 22\n");
             }
             i++;
         } else if (!strcmp(argv[i], "-debug")) {

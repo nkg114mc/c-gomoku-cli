@@ -42,7 +42,7 @@ c-gomoku-cli -each tc=180/30 \
    * `RULE=1`: Play with gomoku rule but winner only wins by exact-5 connection (longer connections will be ignored).
    * `RULE=4`: Play with renju rule.
    * No other rule code is acceptable.
- * `boardsize SIZE`: Set the board size to `SIZE` X `SIZE`. Valid `SIZE` range is `[5..32]`. 
+ * `boardsize SIZE`: Set the board size to `SIZE` X `SIZE`. Valid `SIZE` range is `[5..22]`. 
  * `games N`: Play N games per encounter (default value 1). This value should be set to an even number in tournaments with more than two players to make sure that each player plays an equal number of games with black and white colors.
  * `rounds N`: Multiply the number of rounds to play by `N` (default value 1). This only makes sense to use for tournaments with more than 2 engines.
  * `gauntlet`: Play a gauntlet tournament (first engine against the others). The default is to play a round-robin (plays all pairs).

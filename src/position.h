@@ -27,7 +27,7 @@ const move_t NONE_MOVE = 0xFFFF;
 
 enum Color {BLACK, WHITE, EMPTY, WALL};
 
-#define BOARD_BOUNDARY 4
+#define BOARD_BOUNDARY 5
 #define MAX_BOARD_SIZE_BIT 5
 #define NB_COLOR 2
 
@@ -71,7 +71,7 @@ public:
     void pos_print() const;
 
     bool is_legal_move(move_t move) const;
-    void compute_forbidden_moves(std::vector<move_t> &forbidden_moves) const;
+    bool is_forbidden_move(move_t move) const;
 
     bool check_five_in_line_side(Color side, bool allow_long_connection = true);// const;
     bool check_five_in_line_lastmove(bool allow_long_connection);// const;
@@ -103,6 +103,18 @@ private:
     void check_five_helper(bool allow_long_connc, int &conCnt, int & fiveCnt, Pos* connectionLine);
     bool parse_opening_offset_linestr(std::vector<Pos> &opening_pos, str_t &linestr);
     bool parse_opening_pos_linestr(std::vector<Pos> &opening_pos, str_t &linestr);
+
+    // renju helpers
+    enum OpenFourType { OF_NONE, OF_TRUE /*_OOOO_*/, OF_LONG /*O_OOO_O*/ };
+    bool isForbidden(Pos pos);
+    bool isFive(Pos pos, Color piece);
+    bool isFive(Pos pos, Color piece, int iDir);
+    bool isOverline(Pos pos, Color piece);
+    bool isFour(Pos pos, Color piece, int iDir);
+    OpenFourType isOpenFour(Pos pos, Color piece, int iDir);
+    bool isOpenThree(Pos pos, Color piece, int iDir);
+    bool isDoubleFour(Pos pos, Color piece);
+    bool isDoubleThree(Pos pos, Color piece);
 };
 
 inline Color oppositeColor(Color color)
@@ -112,12 +124,12 @@ inline Color oppositeColor(Color color)
     return (Color)(c ^ 0x1);  // branchless for: color == WHITE ? BLACK : WHITE
 }
 
-inline Pos     POS_RAW(uint8_t x = 0, uint8_t y = 0) { return (x << MAX_BOARD_SIZE_BIT) + y; }
-inline Pos     POS(uint8_t x = 0, uint8_t y = 0) { return POS_RAW(x + BOARD_BOUNDARY, y + BOARD_BOUNDARY); }
-inline uint8_t CoordX(Pos p) { return (p >> MAX_BOARD_SIZE_BIT) - BOARD_BOUNDARY; }
-inline uint8_t CoordY(Pos p) { return (p & ((1 << MAX_BOARD_SIZE_BIT) - 1)) - BOARD_BOUNDARY; }
-inline Pos     PosFromMove(move_t move) { return (Pos)(move & 0x03FF); }
-inline Color   ColorFromMove(move_t move) { return (Color)(move >> 10); }
+inline Pos   POS_RAW(uint8_t x = 0, uint8_t y = 0) { return (x << MAX_BOARD_SIZE_BIT) + y; }
+inline Pos   POS(uint8_t x = 0, uint8_t y = 0) { return POS_RAW(x + BOARD_BOUNDARY, y + BOARD_BOUNDARY); }
+inline int   CoordX(Pos p) { return (p >> MAX_BOARD_SIZE_BIT) - BOARD_BOUNDARY; }
+inline int   CoordY(Pos p) { return (p & ((1 << MAX_BOARD_SIZE_BIT) - 1)) - BOARD_BOUNDARY; }
+inline Pos   PosFromMove(move_t move) { return (Pos)(move & 0x03FF); }
+inline Color ColorFromMove(move_t move) { return (Color)(move >> 10); }
 
 extern uint64_t zobristPc[4][Position::MaxBoardSizeSqr];
 extern uint64_t zobristTurn[4];

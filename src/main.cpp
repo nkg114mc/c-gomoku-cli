@@ -111,7 +111,7 @@ static void *thread_start(void *arg)
         // Clear all previous engine messages and write game index
         if (msg) {
             str_cpy_c(msg, "------------------------------\n");
-            str_cat_fmt(msg, "Game ID: %I\n", idx);
+            str_cat_fmt(msg, "Game ID: %I\n", idx + 1);
         }
 
         // Engine stop/start, as needed
@@ -155,14 +155,14 @@ static void *thread_start(void *arg)
         if (options.pgn.len) {
             const int pgnVerbosity = 0;
             scope(str_destroy) str_t pgnText = str_init();
-            game.game_export_pgn(idx, pgnVerbosity, &pgnText);
+            game.game_export_pgn(idx + 1, pgnVerbosity, &pgnText);
             pgnSeqWriter.seq_writer_push(idx, pgnText);
         }
 
         // Write to SGF file
         if (options.sgf.len) {
             scope(str_destroy) str_t sgfText = str_init();
-            game.game_export_sgf(idx, &sgfText);
+            game.game_export_sgf(idx + 1, &sgfText);
             sgfSeqWriter.seq_writer_push(idx, sgfText);
         }
 
