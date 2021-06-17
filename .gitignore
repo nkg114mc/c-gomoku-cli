@@ -35,6 +35,11 @@
 *.pgn
 *.sgf
 
+# Sample files
+*.csv
+*.bin
+*.bin.lz4
+
 .DS_Store
 
 obj

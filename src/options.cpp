@@ -27,14 +27,12 @@
 // Gomocup time control is in format 'matchtime|turntime' or only 'matchtime'
 static void options_parse_tc_gomocup(const char *s, EngineOptions *eo)
 {
-    //double time = 0, increment = 0;
-    double matchTime = 0;
-    double turnTime = 0;
+    double matchTime = 0, turnTime = 0, increment = 0;
 
     // s = left+increment
     scope(str_destroy) str_t left = str_init(), right = str_init();
     str_tok(str_tok(s, &left, "+"), &right, "+");
-    double increment = atof(right.buf);
+    increment = atof(right.buf);
 
     // parse left
     if (strchr(left.buf, '/')) {
@@ -46,15 +44,17 @@ static void options_parse_tc_gomocup(const char *s, EngineOptions *eo)
     } else {
         // left = matchTime
         matchTime = atof(left.buf);
+        // turnTime is the same as match time 
+        turnTime = matchTime;
     }
 
     eo->timeoutMatch = (int64_t)(matchTime * 1000);
     eo->timeoutTurn = (int64_t)(turnTime * 1000);
+    eo->increment = (int64_t)(increment * 1000);
 }
 
 static int options_parse_eo(int argc, const char **argv, int i, EngineOptions *eo)
 {
-
     while (i < argc && argv[i][0] != '-') {
         const char *tail = NULL;
 
@@ -62,18 +62,18 @@ static int options_parse_eo(int argc, const char **argv, int i, EngineOptions *e
             str_cpy_c(&eo->cmd, tail);
         } else if ((tail = str_prefix(argv[i], "name="))) {
             str_cpy_c(&eo->name, tail);
-        } else if ((tail = str_prefix(argv[i], "option."))) {
-            vec_push(eo->options, str_init_from_c(tail), str_t);  // store "name=value" string
+        } else if ((tail = str_prefix(argv[i], "tc="))) {
+            options_parse_tc_gomocup(tail, eo);
         } else if ((tail = str_prefix(argv[i], "depth="))) {
             eo->depth = atoi(tail);
         } else if ((tail = str_prefix(argv[i], "nodes="))) {
             eo->nodes = atoll(tail);
-        } else if ((tail = str_prefix(argv[i], "movetime="))) {
-            eo->movetime = (int64_t)(atof(tail) * 1000);
         } else if ((tail = str_prefix(argv[i], "maxmemory="))) {
             eo->maxMemory = (int64_t)(atof(tail));
-        } else if ((tail = str_prefix(argv[i], "tc="))) {
-            options_parse_tc_gomocup(tail, eo);
+        } else if ((tail = str_prefix(argv[i], "thread="))) {
+            eo->numThreads = atoi(tail);
+        } else if ((tail = str_prefix(argv[i], "option."))) {
+            vec_push(eo->options, str_init_from_c(tail), str_t);  // store "name=value" string
         } else {
             DIE("Illegal syntax '%s'\n", argv[i]);
         }
@@ -91,7 +91,12 @@ static int options_parse_openings(int argc, const char **argv, int i, Options *o
 
         if ((tail = str_prefix(argv[i], "file=")))
             str_cpy_c(&o->openings, tail);
-        else if ((tail = str_prefix(argv[i], "order="))) {
+        else if ((tail = str_prefix(argv[i], "type="))) {
+            if (!strcmp(tail, "pos"))
+                o->openingType = OPENING_POS;
+            else if (strcmp(tail, "offset"))
+                DIE("Invalid type for -openings: '%s'\n", tail);
+        } else if ((tail = str_prefix(argv[i], "order="))) {
             if (!strcmp(tail, "random"))
                 o->random = true;
             else if (strcmp(tail, "sequential"))
@@ -146,6 +151,49 @@ static int options_parse_sprt(int argc, const char **argv, int i, Options *o)
     return i - 1;
 }
 
+static int options_parse_sample(int argc, const char **argv, int i, Options *o)
+{
+    while (i < argc && argv[i][0] != '-') {
+        const char *tail = NULL;
+
+        if ((tail = str_prefix(argv[i], "freq=")))
+            o->sp.freq = atof(tail);
+        else if ((tail = str_prefix(argv[i], "file=")))
+            str_cpy_c(&o->sp.fileName, tail);
+        else if ((tail = str_prefix(argv[i], "format="))) {
+            if (!strcmp(tail, "csv"))
+                o->sp.bin = false;
+            else if (!strcmp(tail, "bin"))
+                o->sp.bin = true;
+            else if (!strcmp(tail, "bin_lz4"))
+                o->sp.bin = o->sp.compress = true;
+            else
+                DIE("Illegal format in -sample: '%s'\n", tail);
+        } else
+            DIE("Illegal token in -sample: '%s'\n", argv[i]);
+
+        i++;
+    }
+
+    if (!o->sp.fileName.len)
+        str_cpy_fmt(&o->sp.fileName, "sample.%s", o->sp.bin ? (o->sp.compress ? "bin.lz4" : "bin") : "csv");
+
+    return i - 1;
+}
+
+static void check_rule_code(GameRule gr) {
+    bool supported = false;
+    for (int i = 0; i < RULES_COUNT; i++) {
+        if (ALL_VALID_RULES[i] == gr) {
+            supported = true;
+            break;
+        }
+    }
+    if (!supported) {
+        DIE("Unspported game rule code '%i'!\n", gr);
+    }
+}
+
 EngineOptions engine_options_init(void)
 {
     EngineOptions eo = {0};
@@ -153,17 +201,17 @@ EngineOptions engine_options_init(void)
     eo.name = str_init();
     eo.options = vec_init(str_t);
 
-    eo.maxMemory = 0;
+    // init time control info
     eo.timeoutMatch = 0;
     eo.timeoutTurn = 0;
-
-    // all others set to zero
-    eo.time = 0;
     eo.increment = 0;
-    eo.movetime = 0;
     eo.nodes = 0;
     eo.depth = 0;
-    eo.movestogo = 0;
+
+    // default max memory is set to 350MB (same as Gomocup)
+    eo.maxMemory = 367001600;
+    // default thread num is 1
+    eo.numThreads = 1;
 
     return eo;
 }
@@ -180,31 +228,19 @@ Options options_init(void)
     o.openings = str_init();
     o.pgn = str_init();
     o.sgf = str_init();
-    o.plaintext = str_init();
+    o.msg = str_init();
+    o.sp = SampleParams { .fileName = str_init(), .freq = 1.0 };
 
     // non-zero default values
     o.concurrency = 1;
     o.games = o.rounds = 1;
     o.sprtParam.alpha = o.sprtParam.beta = 0.05;
-    o.useTURN = false;
+    o.useTURN = true;
     o.boardSize = 15; // default size
     o.gameRule = GOMOKU_FIVE_OR_MORE;
     o.debug = false;
 
     return o;
-}
-
-void check_rule_code(GameRule gr) {
-    bool supported = false;
-    for (int i = 0; i < RULES_COUNT; i++) {
-        if (ALL_VALID_RULES[i] == gr) {
-            supported = true;
-            break;
-        }
-    }
-    if (!supported) {
-        DIE("Unspported game rule code '%i'!\n", gr);
-    }
 }
 
 void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
@@ -239,24 +275,33 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
             str_cpy_c(&o->pgn, argv[++i]);
         } else if (!strcmp(argv[i], "-sgf")) {
             str_cpy_c(&o->sgf, argv[++i]);
-        } else if (!strcmp(argv[i], "-resign"))
+        } else if (!strcmp(argv[i], "-msg"))
+            str_cpy_c(&o->msg, argv[++i]);
+        else if (!strcmp(argv[i], "-resign"))
             i = options_parse_adjudication(argc, argv, i + 1, &o->resignCount, &o->resignScore);
         else if (!strcmp(argv[i], "-draw"))
             i = options_parse_adjudication(argc, argv, i + 1, &o->drawCount, &o->drawScore);
+        else if (!strcmp(argv[i], "-drawafter"))
+            o->forceDrawAfter = atoi(argv[++i]);
         else if (!strcmp(argv[i], "-sprt"))
             i = options_parse_sprt(argc, argv, i + 1, o);
+        else if (!strcmp(argv[i], "-sample"))
+            i = options_parse_sample(argc, argv, i + 1, o);
         else if (!strcmp(argv[i], "-rule")) {
             o->gameRule = (GameRule)(atoi(argv[i + 1]));
             i++;
+            check_rule_code((GameRule)o->gameRule);
         } else if (!strcmp(argv[i], "-boardsize")) {
             o->boardSize = atoi(argv[i + 1]);
-            if (o->boardSize < 5 || o->boardSize > 25) {
-                DIE("Only support board size of 5 ~ 25\n");
+            if (o->boardSize < 5 || o->boardSize > 22) {
+                DIE("Only support board size of 5 ~ 22\n");
             }
             i++;
         } else if (!strcmp(argv[i], "-debug")) {
             o->debug = true;
             o->log = true; // enable log if debug is enabled
+        } else if (!strcmp(argv[i], "-sendbyboard")) {
+            o->useTURN = false;
         } else {
             DIE("Unknown option '%s'\n", argv[i]);
         }
@@ -273,14 +318,14 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
             for (size_t j = 0; j < vec_size(each.options); j++)
                 vec_push((*eo)[i].options, str_init_from(each.options[j]), str_t);
 
-            if (each.time)
-                (*eo)[i].time = each.time;
+            if (each.timeoutMatch)
+                (*eo)[i].timeoutMatch = each.timeoutMatch;
+
+            if (each.timeoutTurn)
+                (*eo)[i].timeoutTurn = each.timeoutTurn;
 
             if (each.increment)
                 (*eo)[i].increment = each.increment;
-
-            if (each.movetime)
-                (*eo)[i].movetime = each.movetime;
 
             if (each.nodes)
                 (*eo)[i].nodes = each.nodes;
@@ -288,17 +333,11 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
             if (each.depth)
                 (*eo)[i].depth = each.depth;
 
-            if (each.movestogo)
-                (*eo)[i].movestogo = each.movestogo;
-
-            if (each.timeoutMatch)
-                (*eo)[i].timeoutMatch = each.timeoutMatch;
-
-            if (each.timeoutTurn)
-                (*eo)[i].timeoutTurn = each.timeoutTurn;
-
             if (each.maxMemory)
                 (*eo)[i].maxMemory = each.maxMemory;
+
+            if (each.numThreads)
+                (*eo)[i].numThreads = each.numThreads;
         }
     }
 
@@ -313,13 +352,24 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
 
 void options_print(Options *o, EngineOptions **eo) {
 
+    auto openingTypeName = [](OpeningType optype) {
+        switch (optype) {
+        case OPENING_OFFSET: return "offset";
+        case OPENING_POS: return "pos";
+        default: return "";
+        }
+    };
+
     std::cout << "---------------------------" << std::endl;
     std::cout << "Global Options:" << std::endl;
     std::cout << "openings = " << o->openings.buf << std::endl;
+    if (o->openings.len)
+        std::cout << "openingType = " << openingTypeName(o->openingType) << std::endl;
     std::cout << "boardSize = " << o->boardSize << std::endl;
     std::cout << "gameRule = " << o->gameRule << std::endl;
     std::cout << "pgn = " << o->pgn.buf << std::endl;
     std::cout << "sgf = " << o->sgf.buf << std::endl;
+    std::cout << "msg = " << o->msg.buf << std::endl;
     std::cout << "log = " << o->log << std::endl;
     std::cout << "random = " << o->random << std::endl;
     std::cout << "repeat = " << o->repeat << std::endl;
@@ -332,6 +382,7 @@ void options_print(Options *o, EngineOptions **eo) {
     std::cout << "resignScore = " << o->resignScore << std::endl;
     std::cout << "drawCount = " << o->drawCount << std::endl;
     std::cout << "drawScore = " << o->drawScore << std::endl;
+    std::cout << "drawAfter = " << o->forceDrawAfter << std::endl;
     std::cout << "debug = " << o->debug << std::endl;
     std::cout << std::endl;
 
@@ -348,7 +399,12 @@ void options_print(Options *o, EngineOptions **eo) {
         std::cout << "depth = " << e1->depth << std::endl;
         std::cout << "timeoutTurn = " << e1->timeoutTurn << std::endl;
         std::cout << "timeoutMatch = " << e1->timeoutMatch << std::endl;
+        std::cout << "increment = " << e1->increment << std::endl;
         std::cout << "maxMemory = " << e1->maxMemory << std::endl;
+        std::cout << "thread = " << e1->numThreads << std::endl;
+        for (size_t i = 0; i < vec_size(e1->options); i++) {
+            std::cout << "option." << e1->options[i].buf << std::endl;
+        }
     }
     std::cout << "---------------------------" << std::endl;
 }

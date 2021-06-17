@@ -19,6 +19,7 @@
 #include "engine.h"
 #include "options.h"
 #include "str.h"
+#include "extern/lz4frame.h"
 
 enum {
     STATE_NONE,
@@ -37,10 +38,10 @@ enum {
     STATE_DRAW_ADJUDICATION  // draw by adjudication
 };
 
-class Sample {
+struct Sample {
     Position pos;
-    int score;  // score returned by the engine (in cp)
-    int result;  // game result from pos.turn's pov
+    move_t move;    // move returned by the engine
+    int result;     // game result from pos.turn's pov
 };
 
 class Game {
@@ -50,10 +51,7 @@ public:
     Info *info;  // remembered from parsing info lines (for PGN comments)
     Sample *samples;  // list of samples when generating training data
     GameRule game_rule; // rule is gomoku or renju, etc
-    int round, game, ply, state;
-    bool sfen;  // use S-FEN for this game (ie. HAha instead of KQkq)
-    char pad[7];
-    int board_size;
+    int round, game, ply, state, board_size;
     
 
     void game_init(int round, int game);
@@ -64,20 +62,22 @@ public:
     int game_play(Worker *w, const Options *o, Engine engines[2],
         const EngineOptions *eo[2], bool reverse);
 
-    void game_decode_state(str_t *result, str_t *reason);
-    void game_export_pgn(int verbosity, str_t *out);
-    void game_export_sgf(str_t *out);
+    void game_decode_state(str_t *result, str_t *reason, const char* restxt[3] = nullptr) const;
+    void game_export_pgn(size_t gameIdx, int verbosity, str_t *out) const;
+    void game_export_sgf(size_t gameIdx, str_t *out) const;
+    void game_export_samples(FILE *out, bool bin, LZ4F_compressionContext_t lz4Ctx = nullptr) const;
 
 private:
-
     void compute_time_left(const EngineOptions *eo, int64_t *timeLeft);
     void send_board_command(Position *pos, Worker *w, Engine *engine);
     void gomocup_turn_info_command(const EngineOptions *eo, 
                                    const int64_t timeLeft, 
                                    Worker *w, 
                                    Engine *engine);
-    void gomocup_game_info_command(const EngineOptions *eo[2], int ei, 
-                                   const Options *option, 
+    void gomocup_game_info_command(const EngineOptions *eo, 
+                                   const Options *option,
                                    Worker *w, 
                                    Engine *engine);
+    void game_export_samples_csv(FILE *out) const;
+    void game_export_samples_bin(FILE *out, LZ4F_compressionContext_t lz4Ctx) const;
 };

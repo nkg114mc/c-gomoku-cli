@@ -1,7 +1,7 @@
 CC=g++
 #CXXFLAGS+= -g -DDEBUG
 CXXFLAGS+= -DNDEBUG
-CXXFLAGS+= -std=c++17 -O3 -finline-functions -funroll-all-loops -fno-rtti -msse4.2 -pthread -lm -m64 -DIS_64BIT -flto -Wall -Wcast-qual -pedantic -Wextra -Wshadow -fstrict-aliasing
+CXXFLAGS+= -std=c++17 -O3 -finline-functions -funroll-all-loops -fno-rtti -msse4.2 -pthread -lm -m64 -DIS_64BIT -flto -Wall -Wcast-qual -pedantic -Wextra -Wshadow -fstrict-aliasing -Wno-attributes
 
 
 OBJFOLD=obj
@@ -20,13 +20,21 @@ OBJ = $(OBJFOLD)/engine.o \
 	$(OBJFOLD)/position.o \
 	$(OBJFOLD)/game.o
 
+OBJ_EXT = $(OBJFOLD)/extern_lz4.o \
+	$(OBJFOLD)/extern_lz4frame.o \
+	$(OBJFOLD)/extern_lz4hc.o \
+	$(OBJFOLD)/extern_xxhash.o \
+
 EXE = c-gomoku-cli
 
-$(EXE): mkfolders $(OBJ)
-	$(CC) $(CXXFLAGS) $(DEFINES) $(LDFLAGS) $(OBJ) -o $(EXE) -lm -pthread
+$(EXE): mkfolders $(OBJ) $(OBJ_EXT)
+	$(CC) $(CXXFLAGS) $(DEFINES) $(LDFLAGS) $(OBJ) $(OBJ_EXT) -o $(EXE) -lm -pthread
 
 $(OBJFOLD)/%.o: %.cpp
 	$(CC) $(CXXFLAGS) $(DEFINES) -c $*.cpp -o $(OBJFOLD)/$*.o
+
+$(OBJFOLD)/extern_%.o: extern/%.c
+	$(CC) $(CXXFLAGS) $(DEFINES) -c extern/$*.c -o $(OBJFOLD)/extern_$*.o
 
 clean:
 	rm -rf $(OBJFOLD)
