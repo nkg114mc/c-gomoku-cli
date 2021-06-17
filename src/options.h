@@ -36,8 +36,7 @@ struct Options {
     int resignCount, resignScore;
     int drawCount, drawScore;
     int forceDrawAfter;
-    bool log, random, repeat, sprt, gauntlet, useTURN, debug;
-    char pad[1];
+    bool log, random, repeat, sprt, gauntlet, useTURN, debug, saveLoseOnly;
     int boardSize;
     int gameRule;
     OpeningType openingType;

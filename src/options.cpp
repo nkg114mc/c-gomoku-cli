@@ -254,6 +254,8 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
             o->repeat = true;
         else if (!strcmp(argv[i], "-gauntlet"))
             o->gauntlet = true;
+        else if (!strcmp(argv[i], "-loseonly"))
+            o->saveLoseOnly = true;
         else if (!strcmp(argv[i], "-log"))
             o->log = true;
         else if (!strcmp(argv[i], "-concurrency"))
@@ -371,10 +373,15 @@ void options_print(Options *o, EngineOptions **eo) {
     std::cout << "sgf = " << o->sgf.buf << std::endl;
     std::cout << "msg = " << o->msg.buf << std::endl;
     std::cout << "log = " << o->log << std::endl;
+    std::cout << "sample = " << o->sp.fileName.buf << std::endl;
+    if (o->sp.fileName.len)
+        std::cout << "sample.freq = " << o->sp.freq << std::endl;
     std::cout << "random = " << o->random << std::endl;
     std::cout << "repeat = " << o->repeat << std::endl;
     std::cout << "sprt = " << o->sprt << std::endl;
     std::cout << "gauntlet = " << o->gauntlet << std::endl;
+    if (o->gauntlet)
+        std::cout << "loseonly = " << o->saveLoseOnly << std::endl;
     std::cout << "concurrency = " << o->concurrency << std::endl;
     std::cout << "games = " << o->games << std::endl;
     std::cout << "rounds = " << o->rounds << std::endl;

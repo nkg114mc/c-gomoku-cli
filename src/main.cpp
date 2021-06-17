@@ -171,41 +171,43 @@ static void *thread_start(void *arg)
         }
 
         const int blackIdx = color ^ job.reverse;
+        const int whiteIdx = oppositeColor((Color)blackIdx);
 
         printf("[%d] Started game %zu of %zu (%s vs %s)\n", w->id, idx + 1, count,
-            engines[blackIdx].name.buf, engines[oppositeColor((Color)blackIdx)].name.buf);
+            engines[blackIdx].name.buf, engines[whiteIdx].name.buf);
 
         if (msg)
-            str_cat_fmt(msg, "Engines: %S x %S\n", engines[blackIdx].name, 
-                        engines[oppositeColor((Color)blackIdx)].name);
+            str_cat_fmt(msg, "Engines: %S x %S\n", engines[blackIdx].name, engines[whiteIdx].name);
 
         const EngineOptions *eoPair[2] = {&eo[ei[0]], &eo[ei[1]]};
         const int wld = game.game_play(w, &options, engines, eoPair, job.reverse);
 
-        // Write to PGN file
-        if (options.pgn.len) {
-            const int pgnVerbosity = 0;
-            scope(str_destroy) str_t pgnText = str_init();
-            game.game_export_pgn(idx + 1, pgnVerbosity, &pgnText);
-            pgnSeqWriter.seq_writer_push(idx, pgnText);
-        }
+        if (!options.gauntlet || !options.saveLoseOnly || wld == RESULT_LOSS) {
+            // Write to PGN file
+            if (options.pgn.len) {
+                const int pgnVerbosity = 0;
+                scope(str_destroy) str_t pgnText = str_init();
+                game.game_export_pgn(idx + 1, pgnVerbosity, &pgnText);
+                pgnSeqWriter.seq_writer_push(idx, pgnText);
+            }
 
-        // Write to SGF file
-        if (options.sgf.len) {
-            scope(str_destroy) str_t sgfText = str_init();
-            game.game_export_sgf(idx + 1, &sgfText);
-            sgfSeqWriter.seq_writer_push(idx, sgfText);
-        }
+            // Write to SGF file
+            if (options.sgf.len) {
+                scope(str_destroy) str_t sgfText = str_init();
+                game.game_export_sgf(idx + 1, &sgfText);
+                sgfSeqWriter.seq_writer_push(idx, sgfText);
+            }
 
-        // Write engine messages to TXT file
-        if (msg)
-            msgSeqWriter.seq_writer_push(idx, messages);
+            // Write engine messages to TXT file
+            if (msg)
+                msgSeqWriter.seq_writer_push(idx, messages);
 
-        // Write to Sample file
-        if (options.sp.fileName.len) {
-            pthread_mutex_lock(&sampleFileMtx); // lock sample file before writing
-            game.game_export_samples(sampleFile, options.sp.bin, sampleFileLz4Ctx);
-            pthread_mutex_unlock(&sampleFileMtx);
+            // Write to Sample file
+            if (options.sp.fileName.len) {
+                pthread_mutex_lock(&sampleFileMtx); // lock sample file before writing
+                game.game_export_samples(sampleFile, options.sp.bin, sampleFileLz4Ctx);
+                pthread_mutex_unlock(&sampleFileMtx);
+            }
         }
 
         // Write to stdout a one line summary of the game
@@ -213,7 +215,7 @@ static void *thread_start(void *arg)
         game.game_decode_state(&result, &reason);
 
         printf("[%d] Finished game %zu (%s vs %s): %s {%s}\n", w->id, idx + 1,
-            engines[blackIdx].name.buf, engines[oppositeColor((Color)blackIdx)].name.buf, result.buf, reason.buf);
+            engines[blackIdx].name.buf, engines[whiteIdx].name.buf, result.buf, reason.buf);
 
         // Pair update
         int wldCount[3] = {0};
