@@ -23,10 +23,10 @@ c-gomoku-cli [-each [eng_options]] -engine [eng_options] -engine [eng_options] .
 c-gomoku-cli -each tc=180/30 \
     -engine name=Wine cmd=./example-engine/pbrain-wine \
     -engine name=Rapfi cmd=./example-engine/pbrain-rapfi1 \
-    -rule 0 -boardsize 20 -rounds 1 -games 4000 -debug -repeat \
-    -concurrency 8 -draw number=200 \
-    -pgn my_games.pgn -sgf my_games.sgf \
-    -openings file=openings_dir/openings_freestyle.txt order=random
+    -rule 0 -boardsize 20 -rounds 2 -games 4000 -debug -repeat \
+    -concurrency 8 -drawafter 200 \
+    -pgn my_games.pgn -sgf my_games.sgf -msg my_games.txt \
+    -openings file=opening_examples/offset_freestyle_20x20.txt order=random
 ```
 
 ### Options
@@ -121,11 +121,11 @@ b7d6e6f7h2k5
 
 This notation is common among many Gomoku/Renju applications. (For example, you can acquire a pos notation text by using "getpos" command in Yixin-Board).
 
-###Sampling (advanced)
+### Sampling (advanced)
 
-Sampling is used to record various position and engine outputs in a game, as well as the final game result. These can be used as training data, which can be used to fit the parameters of a chess engine evaluation, otherwise known as supervised learning. Sample record is usually in binary format easy for engine to process, meanwhile a human readable and easily parsable CSV file can also be generated. Note that only game which result is not "win by time forfeit" or "win by opponent illegal move" will be recorded.
+Sampling is used to record various position and engine outputs in a game, as well as the final game result. These can be used as training data, which can be used to fit the parameters of a gomoku engine evaluation, otherwise known as supervised learning. Sample record is usually in binary format easy for engine to process, meanwhile a human readable and easily parsable CSV file can also be generated. Note that only game which result is not "win by time forfeit" or "win by opponent illegal move" will be recorded.
 
-Syntax is `-sample [freq=%f] [format=csv|bin|bin_lz4] [file=%s] `. Example `-sample freq=0.25 format=csv file=out.csv `.
+Syntax is `-sample [freq=%f] [format=csv|bin|bin_lz4] [file=%s]`. Example `-sample freq=0.25 format=csv file=out.csv `.
 
 + `freq` is the sampling frequency (floating point number between `0` and `1`). Defaults to `1` if omitted.
 + `file` is the name of the file where samples are written. Defaults to `sample.[csv|bin|bin.lz4]` if omitted.
@@ -137,11 +137,11 @@ Binary format uses variable length encoding show below, which is easy to parse f
 
 ```c++
 struct Entry {
-    uint16_t boardsize : 5;	// board size
-	uint16_t ply : 9;		// current number of stones on board
-    uint16_t result : 2;	// final game result: 0=loss, 1=draw, 2=win
-    uint16_t move;			// move output by the engine
-    uint16_t position[ply];	// move sequence that representing a position
+    uint16_t boardsize : 5; // board size
+    uint16_t ply : 9;       // current number of stones on board
+    uint16_t result : 2;    // final game result: 0=loss, 1=draw, 2=win
+    uint16_t move;          // move output by the engine
+    uint16_t position[ply]; // move sequence that representing a position
 };
 ```
 
