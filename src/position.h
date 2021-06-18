@@ -48,6 +48,18 @@ enum OpeningType {
     OPENING_OFFSET, OPENING_POS
 };
 
+enum TransformType {
+    IDENTITY,   // (x, y) -> (x, y)
+    ROTATE_90,  // (x, y) -> (y, s - x)
+    ROTATE_180, // (x, y) -> (s - x, s - y)
+    ROTATE_270, // (x, y) -> (s - y, x)
+    FLIP_X,     // (x, y) -> (x, s - y)
+    FLIP_Y,     // (x, y) -> (s - x, y)
+    FLIP_XY,    // (x, y) -> (y, x)
+    FLIP_YX,    // (x, y) -> (s - y, s - x)
+    NB_TRANS
+};
+
 class Position {
 public:
 	static const int MaxBoardSize = 1 << MAX_BOARD_SIZE_BIT;
@@ -64,6 +76,8 @@ public:
 
     void move(move_t m);
     void undo();
+
+    void transform(TransformType type);
 
     move_t gomostr_to_move(char *move_str) const;
     std::string move_to_gomostr(move_t move) const;

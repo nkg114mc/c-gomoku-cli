@@ -159,14 +159,15 @@ static void *thread_start(void *arg)
         }
     
         // Choose opening position
-        openings.openings_next(&fen, options.repeat ? idx / 2 : idx, w->id);
+        size_t openingRound;
+        openings.openings_next(&fen, &openingRound, options.repeat ? idx / 2 : idx, w->id);
 
         // Play 1 game
         Game game;
         game.game_init(job.round, job.game);
         int color = BLACK; // black play first in gomoku/renju by default
 
-        if (!game.game_load_fen(&fen, &color, &options)) {
+        if (!game.game_load_fen(&fen, &color, &options, openingRound)) {
             DIE("[%d] illegal FEN '%s'\n", w->id, fen.buf);
         }
 

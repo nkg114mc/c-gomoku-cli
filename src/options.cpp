@@ -252,6 +252,8 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-repeat"))
             o->repeat = true;
+        else if (!strcmp(argv[i], "-transform"))
+            o->transform = true;
         else if (!strcmp(argv[i], "-gauntlet"))
             o->gauntlet = true;
         else if (!strcmp(argv[i], "-loseonly"))
@@ -378,6 +380,7 @@ void options_print(Options *o, EngineOptions **eo) {
         std::cout << "sample.freq = " << o->sp.freq << std::endl;
     std::cout << "random = " << o->random << std::endl;
     std::cout << "repeat = " << o->repeat << std::endl;
+    std::cout << "transform = " << o->transform << std::endl;
     std::cout << "sprt = " << o->sprt << std::endl;
     std::cout << "gauntlet = " << o->gauntlet << std::endl;
     if (o->gauntlet)

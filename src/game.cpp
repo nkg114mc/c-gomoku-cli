@@ -62,18 +62,23 @@ void Game::game_init(int rd, int gm)
     this->samples = vec_init(Sample);
 }
 
-bool Game::game_load_fen(str_t *fen, int *color, const Options *o)
+bool Game::game_load_fen(str_t *fen, int *color, const Options *o, size_t round)
 {
-    //vec_push(pos, (Position){0}, Position);
     Position p0(o->boardSize);
     vec_push(pos, p0, Position);
 
     if (pos[0].apply_opening(*fen, o->openingType)) {
         *color = pos[0].get_turn();
-        return true;
     } else {
         return false;
     }
+
+    if (o->transform) {
+        TransformType transType = (TransformType)(round % NB_TRANS);
+        pos[0].transform(transType);
+    }
+
+    return true;
 }
 
 void Game::game_destroy()

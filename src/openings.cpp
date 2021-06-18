@@ -70,10 +70,11 @@ void Openings::openings_destroy(int threadId)
     vec_destroy(index);
 }
 
-void Openings::openings_next(str_t *fen, size_t idx, int threadId)
+void Openings::openings_next(str_t *fen, size_t *round, size_t idx, int threadId)
 {
     if (!file) {
         str_cpy_c(fen, "");
+        *round = 0;
         return;
     }
 
@@ -86,6 +87,7 @@ void Openings::openings_next(str_t *fen, size_t idx, int threadId)
     pthread_mutex_unlock(&mtx);
 
     str_cpy(fen, line);
+    *round = idx / vec_size(index);
 
     //assert(openings_validate_opening_str(*fen));
 }

@@ -57,7 +57,7 @@ public:
     void game_init(int round, int game);
     void game_destroy();
 
-    bool game_load_fen(str_t *fen, int *color, const Options *o);
+    bool game_load_fen(str_t *fen, int *color, const Options *o, size_t round);
 
     int game_play(Worker *w, const Options *o, Engine engines[2],
         const EngineOptions *eo[2], bool reverse);

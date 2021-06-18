@@ -52,6 +52,29 @@ inline Color opponent_color(Color c) {
 	return OPPSITE_COLOR[c];
 }
 
+inline Pos transformPos(Pos p, int boardsize, TransformType type) {
+    int x = CoordX(p), y = CoordY(p);
+    int s = boardsize - 1;
+    switch (type) {
+    case ROTATE_90:  // (x, y) -> (y, s - x)
+        return POS(y, s - x);
+    case ROTATE_180: // (x, y) -> (s - x, s - y)
+        return POS(s - x, s - y);
+    case ROTATE_270: // (x, y) -> (s - y, x)
+        return POS(s - y, x);
+    case FLIP_X:     // (x, y) -> (x, s - y)
+        return POS(x, s - y);
+    case FLIP_Y:     // (x, y) -> (s - x, y)
+        return POS(s - x, y);
+    case FLIP_XY:    // (x, y) -> (y, x)
+        return POS(y, x);
+    case FLIP_YX:    // (x, y) -> (s - y, s - x)
+        return POS(s - y, s - x);
+    default:
+        return POS(x, y);
+    }
+}
+
 void Position::initBoard(int size) {
     boardSize = size;
 	boardSizeSqr = boardSize * boardSize;
@@ -92,6 +115,46 @@ void Position::undo() {
 	delPiece(lastPos);
     key ^= zobristTurn[playerToMove];
 	playerToMove = opponent_color(playerToMove);
+}
+
+void Position::transform(TransformType type) {
+    // Skip identity transform
+    if (type == IDENTITY)
+        return;
+
+    // Clear previous board stones
+    Color tmpBoard[MaxBoardSizeSqr];
+    memcpy(tmpBoard, board, sizeof(tmpBoard));
+    for (int x = 0; x < boardSize; x++)
+        for (int y = 0; y < boardSize; y++) {
+            Pos pos = POS(x, y);
+            if (board[pos] != EMPTY)
+                delPiece(pos);  // delete prev stone if exists
+        }
+
+    // Transform all board cells and zobrist key
+    for (int x = 0; x < boardSize; x++)
+        for (int y = 0; y < boardSize; y++) {
+            Pos pos = POS(x, y);
+            Pos transformedPos = transformPos(pos, boardSize, type);
+            if (tmpBoard[pos] != EMPTY)
+                setPiece(transformedPos, tmpBoard[pos]);
+        }
+
+    // Transform all history moves
+    for (int i = 0; i < moveCount; i++) {
+        move_t move = historyMoves[i];
+        Pos pos = PosFromMove(move);
+        Color color = ColorFromMove(move);
+        Pos transformedPos = transformPos(pos, boardSize, type);
+        move_t transformedMove = buildMovePos(transformedPos, color);
+        historyMoves[i] = transformedMove;
+    }
+
+    // Transform all win connection
+    for (int i = 0; i < winConnectionLen; i++) {
+        winConnectionPos[i] = transformPos(winConnectionPos[i], boardSize, type);
+    }
 }
 
 // Prints the position in ASCII 'art' (for debugging)
@@ -418,7 +481,7 @@ bool Position::parse_opening_offset_linestr(std::vector<Pos> &opening_pos, str_t
     int hboardSize = this->boardSize / 2;
 
     std::stringstream ss;
-    for (int i = 0; i < linestr.len; i++) {
+    for (size_t i = 0; i < linestr.len; i++) {
         char ch = linestr.buf[i];
         if ((ch <= '9' && ch >= '0') || ch == '-') {
             ss << ch;
@@ -464,7 +527,7 @@ bool Position::parse_opening_pos_linestr(std::vector<Pos> &opening_pos, str_t &l
     opening_pos.clear();
 
     std::stringstream ss;
-    for (int i = 0; i < linestr.len; i++) {
+    for (size_t i = 0; i < linestr.len; i++) {
         char ch = linestr.buf[i];
 
         if (ch >= 'a' && ch <= 'z') {
