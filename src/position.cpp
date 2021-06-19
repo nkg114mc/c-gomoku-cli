@@ -24,16 +24,13 @@
 #include "position.h"
 #include "util.h"
 
-const uint16_t POS_MASK = 0x03FF;
-
-inline Pos POS_R(uint8_t x = 0, uint8_t y = 0) { return (x << MAX_BOARD_SIZE_BIT) + y; }
-inline Pos POS(uint8_t x = 0, uint8_t y = 0) { return POS_R(x + BOARD_BOUNDARY, y + BOARD_BOUNDARY); }
-inline uint8_t CoordX(Pos p) { return (p >> MAX_BOARD_SIZE_BIT) - BOARD_BOUNDARY; }
-inline uint8_t CoordY(Pos p) { return (p & ((1 << MAX_BOARD_SIZE_BIT) - 1)) - BOARD_BOUNDARY; }
-inline int getXFromMove(move_t move) { return CoordX(getPosFromMove(move)); }
-inline int getYFromMove(move_t move) { return CoordY(getPosFromMove(move)); }
-Pos getPosFromMove(move_t move) { return (Pos)(move & POS_MASK); }
-Color getColorFromMove(move_t move) { return (Color)(move >> 10); }
+typedef int16_t Direction;
+const Direction DIRECTION[4] = {
+    1, 
+    Position::MaxBoardSize - 1, 
+    Position::MaxBoardSize, 
+    Position::MaxBoardSize + 1
+};
 
 inline move_t buildMove(int x, int y, Color side) { 
     assert(side == WHITE || side == BLACK);
@@ -41,24 +38,41 @@ inline move_t buildMove(int x, int y, Color side) {
     move_t m = (side << 10) | p;
     return m;
 }
-inline move_t buildMoveReal(int x, int y, Color side) {
-    assert(side == WHITE || side == BLACK);
-    Pos preal = POS_R(x, y);
-    move_t m = (side << 10) | preal;
-    return m;
-}
+
 inline move_t buildMovePos(Pos p, Color side) { 
     assert(side == WHITE || side == BLACK);
     move_t m = (side << 10) | p;
     return m;
 }
 
-Color OPPSITE_COLOR[4] = {
-	WHITE, BLACK, EMPTY, WALL
-};
-
-Color opponent_color(Color c) {
+inline Color opponent_color(Color c) {
+    static const Color OPPSITE_COLOR[4] = {
+        WHITE, BLACK, EMPTY, WALL
+    };
 	return OPPSITE_COLOR[c];
+}
+
+inline Pos transformPos(Pos p, int boardsize, TransformType type) {
+    int x = CoordX(p), y = CoordY(p);
+    int s = boardsize - 1;
+    switch (type) {
+    case ROTATE_90:  // (x, y) -> (y, s - x)
+        return POS(y, s - x);
+    case ROTATE_180: // (x, y) -> (s - x, s - y)
+        return POS(s - x, s - y);
+    case ROTATE_270: // (x, y) -> (s - y, x)
+        return POS(s - y, x);
+    case FLIP_X:     // (x, y) -> (x, s - y)
+        return POS(x, s - y);
+    case FLIP_Y:     // (x, y) -> (s - x, y)
+        return POS(s - x, y);
+    case FLIP_XY:    // (x, y) -> (y, x)
+        return POS(y, x);
+    case FLIP_YX:    // (x, y) -> (s - y, s - x)
+        return POS(s - y, s - x);
+    default:
+        return POS(x, y);
+    }
 }
 
 void Position::initBoard(int size) {
@@ -79,16 +93,14 @@ void Position::clear() {
     initBoard(oldSize);
 }
 
-Position::Position() {
-	initBoard(15);
-}
-
 Position::Position(int bSize) {
+    if (bSize > RealBoardSize)
+        DIE("board size too large\n");
 	initBoard(bSize);
 }
 
 void Position::move(move_t m) {
-    Pos pos = getPosFromMove(m);
+    Pos pos = PosFromMove(m);
 	setPiece(pos, playerToMove);
 	historyMoves[moveCount] = m;
 	playerToMove = opponent_color(playerToMove);
@@ -99,10 +111,50 @@ void Position::move(move_t m) {
 void Position::undo() {
 	assert(moveCount > 0);
 	moveCount--;
-    Pos lastPos = getPosFromMove(historyMoves[moveCount]);
+    Pos lastPos = PosFromMove(historyMoves[moveCount]);
 	delPiece(lastPos);
     key ^= zobristTurn[playerToMove];
 	playerToMove = opponent_color(playerToMove);
+}
+
+void Position::transform(TransformType type) {
+    // Skip identity transform
+    if (type == IDENTITY)
+        return;
+
+    // Clear previous board stones
+    Color tmpBoard[MaxBoardSizeSqr];
+    memcpy(tmpBoard, board, sizeof(tmpBoard));
+    for (int x = 0; x < boardSize; x++)
+        for (int y = 0; y < boardSize; y++) {
+            Pos pos = POS(x, y);
+            if (board[pos] != EMPTY)
+                delPiece(pos);  // delete prev stone if exists
+        }
+
+    // Transform all board cells and zobrist key
+    for (int x = 0; x < boardSize; x++)
+        for (int y = 0; y < boardSize; y++) {
+            Pos pos = POS(x, y);
+            Pos transformedPos = transformPos(pos, boardSize, type);
+            if (tmpBoard[pos] != EMPTY)
+                setPiece(transformedPos, tmpBoard[pos]);
+        }
+
+    // Transform all history moves
+    for (int i = 0; i < moveCount; i++) {
+        move_t move = historyMoves[i];
+        Pos pos = PosFromMove(move);
+        Color color = ColorFromMove(move);
+        Pos transformedPos = transformPos(pos, boardSize, type);
+        move_t transformedMove = buildMovePos(transformedPos, color);
+        historyMoves[i] = transformedMove;
+    }
+
+    // Transform all win connection
+    for (int i = 0; i < winConnectionLen; i++) {
+        winConnectionPos[i] = transformPos(winConnectionPos[i], boardSize, type);
+    }
 }
 
 // Prints the position in ASCII 'art' (for debugging)
@@ -159,52 +211,37 @@ void Position::delPiece(Pos pos) {
 	board[pos] = EMPTY;
 }
 
-void Position::gen_all_legal_moves(std::vector<move_t> &legal_moves) const {
-    legal_moves.clear();
-    
-    for (int i = 0; i < boardSize; i++) {
-        for (int j = 0; j < boardSize; j++) {
-            Pos p = POS(i, j);
-            if (board[p] == EMPTY) {
-                move_t m = buildMove(i, j, playerToMove);
-                legal_moves.push_back(m);
-            }
-        }
-    }
-}
-
 bool Position::isInBoard(Pos pos) const {
 	assert(pos < MaxBoardSizeSqr);
 	return (board[pos] != WALL);
 }
 
 bool Position::isInBoardXY(int x, int y) const {
-	if ((x >= 0 && x < boardSize) && 
-        (y >= 0 && y < boardSize)) {
-        return true;
-    }
-	return false;
+    return (x >= 0 && x < boardSize) && (y >= 0 && y < boardSize);
 }
 
 bool Position::is_legal_move(move_t move) const {
-    Pos movePos = getPosFromMove(move);
-    Color moveSide = getColorFromMove(move);
+    Pos movePos = PosFromMove(move);
 
-    if (isInBoard(movePos)) {
-        if (board[movePos] == EMPTY) {
-            return true;
-        }
+    if (isInBoard(movePos) && board[movePos] == EMPTY) {
+        return true;
+    } else {
+        // std::cout << board[movePos] << std::endl;
+        // std::cout << CoordX(movePos) << " " << CoordY(movePos) << std::endl;
+        return false; // not ok
     }
-
-    std::cout << board[movePos] << std::endl;
-    std::cout << getPosX(movePos) << " " << getPosY(movePos) << std::endl;
-    
-    return false; // not ok
 }
 
-void Position::compute_forbidden_moves(std::vector<move_t> &forbidden_moves) const {
-    // TODO: implement this funciton
-    // do nothing so far
+bool Position::is_forbidden_move(move_t move) const {
+    Pos pos = PosFromMove(move);
+    Color color = ColorFromMove(move);
+    if (color != BLACK)
+        return false;
+
+    // Check forbidden point using recursive finder
+    // Note that forbidden point finder needs an empty pos to judge.
+    assert(board[pos] == EMPTY);
+    return const_cast<Position*>(this)->isForbidden(pos);
 }
 
 void Position::check_five_helper(bool allow_long_connc, int &conCnt, int & fiveCnt, Pos* connectionLine) {
@@ -321,7 +358,7 @@ bool Position::check_five_in_line_lastmove(bool allow_long_connection) { // cons
     if (moveCount < 5) {
         return false;
     }
-    Pos lastPos = getPosFromMove(historyMoves[moveCount - 1]);
+    Pos lastPos = PosFromMove(historyMoves[moveCount - 1]);
     Color lastPiece = board[lastPos];
     return check_five_in_line_side(lastPiece, allow_long_connection);
 }
@@ -390,20 +427,43 @@ bool Position::is_valid_move_gomostr(char *move_str) {
     return true;
 }
 
-
 std::string Position::move_to_gomostr(move_t move) const {
-    int x = getXFromMove(move);
-    int y = getYFromMove(move);
+    int x = CoordX(PosFromMove(move));
+    int y = CoordY(PosFromMove(move));
     std::stringstream ss("");
     ss << x << "," << y;
     return ss.str();
 }
 
-// apply the openning str in the format of plain
-bool Position::apply_openning_plaintext(str_t &opening_str) {
+std::string Position::move_to_opening_str(move_t move, OpeningType type) const {
+    std::stringstream ss;
+    int hboardSize = this->boardSize / 2;
+    Pos p = PosFromMove(move);
 
+    switch (type) {
+    case OPENING_OFFSET:
+        ss << (CoordX(p) - hboardSize) << "," << (CoordY(p) - hboardSize);
+        break;
+    case OPENING_POS:
+        ss << char(CoordX(p) + 'a') << int(CoordY(p) + 1);
+        break;
+    }
+
+    return ss.str();
+}
+
+// apply the openning str in the specific format
+bool Position::apply_opening(str_t &opening_str, OpeningType type) {
     std::vector<Pos> openning_pos;
-    bool parsingOk = parse_openning_line_str(openning_pos, opening_str, this->boardSize);
+    bool parsingOk = false;
+    switch (type) {
+    case OPENING_OFFSET:
+        parsingOk = parse_opening_offset_linestr(openning_pos, opening_str);
+        break;
+    case OPENING_POS:
+        parsingOk = parse_opening_pos_linestr(openning_pos, opening_str);
+        break;
+    }
     if (!parsingOk) {
         return false;
     }
@@ -416,17 +476,20 @@ bool Position::apply_openning_plaintext(str_t &opening_str) {
     return true;
 }
 
-bool Position::parse_openning_line_str(std::vector<Pos> &openning_pos, str_t &linestr, int boardSz) {
-    openning_pos.clear();
-    int hboardSize = boardSz / 2;
+bool Position::parse_opening_offset_linestr(std::vector<Pos> &opening_pos, str_t &linestr) {
+    opening_pos.clear();
+    int hboardSize = this->boardSize / 2;
 
     std::stringstream ss;
-    for (int i = 0; i < linestr.len; i++) {
+    for (size_t i = 0; i < linestr.len; i++) {
         char ch = linestr.buf[i];
         if ((ch <= '9' && ch >= '0') || ch == '-') {
             ss << ch;
-        } else {
+        } else if (ch == ',' || ch == ' ') {
             ss << ' '; 
+        } else {
+            printf("Can not apply openning, unknown coordinate '%c'.\n", ch);
+            return false;
         }
     }
 
@@ -438,19 +501,17 @@ bool Position::parse_openning_line_str(std::vector<Pos> &openning_pos, str_t &li
     while (ss >> ofst) {
         if (ofst != -9999) {
             if (ofst >= -16 && ofst <= 15) {
-                buff[cnt] = ofst;
-                cnt++;
+                buff[cnt++] = ofst;
                 if (cnt == 2) {
                     int currx = buff[0] + hboardSize;
                     int curry = buff[1] + hboardSize;
                     if (!isInBoardXY(currx, curry)) {
-                        printf("Can not apply openning, the current board is too small.");
+                        printf("Can not apply openning, the current board is too small.\n");
                         return false;
                     }
-                    assert(isInBoardXY(currx, curry));
                     
                     Pos p = POS(currx, curry);
-                    openning_pos.push_back(p);
+                    opening_pos.push_back(p);
 
                     cnt = 0;
                 }
@@ -462,19 +523,300 @@ bool Position::parse_openning_line_str(std::vector<Pos> &openning_pos, str_t &li
     return true; // ok
 }
 
+bool Position::parse_opening_pos_linestr(std::vector<Pos> &opening_pos, str_t &linestr) {
+    opening_pos.clear();
+
+    std::stringstream ss;
+    for (size_t i = 0; i < linestr.len; i++) {
+        char ch = linestr.buf[i];
+
+        if (ch >= 'a' && ch <= 'z') {
+            ss << ' ' << int(ch - 'a') << ' ';
+        } else if (ch >= '0' && ch <= '9') {
+            ss << ch;
+        } else {
+            printf("Can not apply openning, unknown coordinate '%c'.\n", ch);
+            return false;
+        }
+    }
+
+    int cnt = 0;
+    int buff[3];
+    int coord = -9999;
+    while (ss >> coord) {
+        if (coord != -9999) {
+            buff[cnt++] = coord;
+            if (cnt == 2) {
+                int currx = buff[0];
+                int curry = buff[1] - 1;
+                if (!isInBoardXY(currx, curry)) {
+                    printf("Can not apply openning, the current board is too small.\n");
+                    return false;
+                }
+                
+                Pos p = POS(currx, curry);
+                opening_pos.push_back(p);
+                cnt = 0;
+            }
+        }
+        coord = -9999;
+    }
+
+    return true; // ok
+}
+
+// convert a position back to opening string (assuming current position is
+// a normal position, played by black and white alternately)
+std::string Position::to_opening_str(OpeningType type) const {
+    std::stringstream ss;
+    int hboardSize = this->boardSize / 2;
+
+    switch (type) {
+    case OPENING_OFFSET:
+        for (int i = 0; i < get_move_count(); i++) {
+            Pos p = PosFromMove(get_hist_moves()[i]);
+            if (i) ss << ", ";
+            ss << (CoordX(p) - hboardSize) << "," << (CoordY(p) - hboardSize);
+        }
+        break;
+    case OPENING_POS:
+        for (int i = 0; i < get_move_count(); i++) {
+            Pos p = PosFromMove(get_hist_moves()[i]);
+            ss << char(CoordX(p) + 'a') << int(CoordY(p) + 1);
+        }
+        break;
+    }
+
+    return ss.str();
+}
+
 // this is a static method
 void Position::pos_move_with_copy(Position *after, const Position *before, move_t m) {
     memcpy(after, before, sizeof(Position));
     after->move(m);
 }
 
-int Position::getPosX(Pos p) {
-    return (int)CoordX(p);
+// renju helpers
+bool Position::isForbidden(Pos pos) {
+    if (isDoubleThree(pos, BLACK))
+        std::cout << "DoubleThree forbidden move: " << CoordX(pos) << ", " << CoordY(pos) << std::endl;
+    else if (isDoubleFour(pos, BLACK))
+        std::cout << "DoubleFour forbidden move: " << CoordX(pos) << ", " << CoordY(pos) << std::endl;
+    else if (isOverline(pos, BLACK))
+        std::cout << "Overline forbidden move: " << CoordX(pos) << ", " << CoordY(pos) << std::endl;
+    return isDoubleThree(pos, BLACK) || isDoubleFour(pos, BLACK) || isOverline(pos, BLACK);
 }
 
-int Position::getPosY(Pos p) {
-    return (int)CoordY(p);
+bool Position::isFive(Pos pos, Color piece) {
+    if (board[pos] != EMPTY)
+        return false;
+
+    for (int iDir = 0; iDir < 4; iDir++) {
+        if (isFive(pos, piece, iDir))
+            return true;
+    }
+    return false;
 }
+
+bool Position::isFive(Pos pos, Color piece, int iDir) {
+    if (board[pos] != EMPTY)
+        return false;
+
+    int i, j;
+    int count = 1;
+    for (i = 1; i < 5; i++) {
+        if (board[pos - DIRECTION[iDir] * i] == piece)
+            count++;
+        else
+            break;
+    }
+    for (j = 1; j < 6 - i; j++) {
+        if (board[pos + DIRECTION[iDir] * j] == piece)
+            count++;
+        else
+            break;
+    }
+    return count == 5;
+}
+
+bool Position::isOverline(Pos pos, Color piece) {
+    if (board[pos] != EMPTY)
+        return false;
+
+    for (Direction dir : DIRECTION) {
+        int i, j;
+        int count = 1;
+        for (i = 1; i < 6; i++) {
+            if (board[pos - dir * i] == piece)
+                count++;
+            else
+                break;
+        }
+        for (j = 1; j < 7 - i; j++) {
+            if (board[pos + dir * j] == piece)
+                count++;
+            else
+                break;
+        }
+        if (count > 5) 
+            return true;
+    }
+    return false;
+}
+
+bool Position::isFour(Pos pos, Color piece, int iDir) {
+    if (board[pos] != EMPTY)
+        return false;
+    else if (isFive(pos, piece))
+        return false;
+    else if (piece == BLACK && isOverline(pos, BLACK))
+        return false;
+    else if (piece == BLACK || piece == WHITE) {
+        bool four = false;
+        setPiece(pos, piece);
+
+        int i, j;
+        for (i = 1; i < 5; i++) {
+            Pos posi = pos - DIRECTION[iDir] * i;
+            if (board[posi] == piece)
+                continue;
+            else if (board[posi] == EMPTY && isFive(posi, piece, iDir))
+                four = true;
+            break;
+        }
+        for (j = 1; !four && j < 6 - i; j++) {
+            Pos posi = pos + DIRECTION[iDir] * j;
+            if (board[posi] == piece)
+                continue;
+            else if (board[posi] == EMPTY && isFive(posi, piece, iDir))
+                four = true;
+            break;
+        }
+        
+        delPiece(pos);
+        return four;
+    } else
+        return false;
+}
+
+Position::OpenFourType Position::isOpenFour(Pos pos, Color piece, int iDir) {
+    if (board[pos] != EMPTY)
+        return OF_NONE;
+    else if (isFive(pos, piece))
+        return OF_NONE;
+    else if (piece == BLACK && isOverline(pos, BLACK))
+        return OF_NONE;
+    else if (piece == BLACK || piece == WHITE) {
+        setPiece(pos, piece);
+
+        int i, j;
+        int count = 1;
+        int five = 0;
+
+        for (i = 1; i < 5; i++) {
+            Pos posi = pos - DIRECTION[iDir] * i;
+            if (board[posi] == piece) {
+                count++;
+                continue;
+            } else if (board[posi] == EMPTY)
+                five += isFive(posi, piece, iDir);
+            break;
+        }
+        for (j = 1; five && j < 6 - i; j++) {
+            Pos posi = pos + DIRECTION[iDir] * j;
+            if (board[posi] == piece) {
+                count++;
+                continue;
+            } else if (board[posi] == EMPTY)
+                five += isFive(posi, piece, iDir);
+            break;
+        }
+        
+        delPiece(pos);
+        return five == 2 ? (count == 4 ? OF_TRUE : OF_LONG) : OF_NONE;
+    } else
+        return OF_NONE;
+}
+
+bool Position::isOpenThree(Pos pos, Color piece, int iDir) {
+    if (board[pos] != EMPTY)
+        return false;
+    else if (isFive(pos, piece))
+        return false;
+    else if (piece == BLACK && isOverline(pos, BLACK))
+        return false;
+    else if (piece == BLACK || piece == WHITE) {
+        bool openthree = false;
+        setPiece(pos, piece);
+        
+        int i, j;
+        for (i = 1; i < 5; i++) {
+            Pos posi = pos - DIRECTION[iDir] * i;
+            if (board[posi] == piece)
+                continue;
+            else if (board[posi] == EMPTY 
+                && isOpenFour(posi, piece, iDir) == OF_TRUE
+                && !isDoubleFour(posi, piece)
+                && !isDoubleThree(posi, piece))
+                openthree = true;
+            break;
+        }
+        for (j = 1; !openthree && j < 6 - i; j++) {
+            Pos posi = pos + DIRECTION[iDir] * j;
+            if (board[posi] == piece)
+                continue;
+            else if (board[posi] == EMPTY
+                && isOpenFour(posi, piece, iDir) == OF_TRUE
+                && !isDoubleFour(posi, piece)
+                && !isDoubleThree(posi, piece))
+                openthree = true;
+            break;
+        }
+        
+        delPiece(pos);
+        return openthree;
+    } else
+        return false;
+}
+
+bool Position::isDoubleFour(Pos pos, Color piece) {
+    if (board[pos] != EMPTY)
+        return false;
+    else if (isFive(pos, piece))
+        return false;
+
+    int nFour = 0;
+    for (int iDir = 0; iDir < 4; iDir++) {
+        if (isOpenFour(pos, piece, iDir) == OF_LONG)
+            nFour += 2;
+        else if (isFour(pos, piece, iDir))
+            nFour++;
+
+        if (nFour >= 2)
+            return true;
+    }
+
+    return false;
+}
+
+bool Position::isDoubleThree(Pos pos, Color piece) {
+    if (board[pos] != EMPTY)
+        return false;
+    else if (isFive(pos, piece))
+        return false;
+
+    int nThree = 0;
+    for (int iDir = 0; iDir < 4; iDir++) {
+        if (isOpenThree(pos, piece, iDir))
+            nThree++;
+
+        if (nThree >= 2)
+            return true;
+    }
+
+    return false;
+}
+
 
 
 // zobrist

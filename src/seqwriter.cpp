@@ -45,6 +45,10 @@ void SeqWriter::seq_writer_destroy()
 {
     pthread_mutex_destroy(&this->mtx);
     //vec_destroy_rec(this->buf, seq_str_destroy);
+
+    // write out all records even if not sequential
+    write_to_i(vec_size(buf));
+
     fclose(this->out);
 }
 
@@ -75,21 +79,24 @@ void SeqWriter::seq_writer_push(size_t idx, str_t str)
             break;
         }
 
-    if (i) {
-        // Write buf[0..i-1] to file, and destroy elements
-        for (size_t j = 0; j < i; j++) {
-            fputs(buf[j].str.buf, out);
-            buf[j].seq_str_destroy();
-        }
-        fflush(out);
-
-        // Delete buf[0..i-1]
-        memmove(&buf[0], &buf[i], (vec_size(buf) - i) * sizeof(SeqStr));
-        vec_ptr(buf)->size -= i;
-
-        // Updated next expected index
-        idxNext += i;
-    }
+    if (i)
+        write_to_i(i);
 
     pthread_mutex_unlock(&mtx);
+}
+
+void SeqWriter::write_to_i(size_t i) {
+    // Write buf[0..i-1] to file, and destroy elements
+    for (size_t j = 0; j < i; j++) {
+        fputs(buf[j].str.buf, out);
+        buf[j].seq_str_destroy();
+    }
+    fflush(out);
+
+    // Delete buf[0..i-1]
+    memmove(&buf[0], &buf[i], (vec_size(buf) - i) * sizeof(SeqStr));
+    vec_ptr(buf)->size -= i;
+
+    // Updated next expected index
+    idxNext += i;
 }

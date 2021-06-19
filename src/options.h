@@ -21,26 +21,37 @@
 #include "str.h"
 #include "position.h"
 
-typedef struct {
-    str_t openings, pgn, sgf, plaintext;
+struct SampleParams {
+    str_t fileName;
+    double freq;
+    bool bin, compress;
+    char pad[2];
+};
+
+struct Options {
+    str_t openings, pgn, sgf, msg;
     SPRTParam sprtParam;
     uint64_t srand;
     int concurrency, games, rounds;
     int resignCount, resignScore;
     int drawCount, drawScore;
-    bool log, random, repeat, sprt, gauntlet, useTURN;
-    char pad[2];
+    int forceDrawAfter;
     int boardSize;
     int gameRule;
+    bool log, random, repeat, transform;
+    bool sprt, gauntlet, useTURN, saveLoseOnly;
     bool debug;
-} Options;
+    char pad[3];
+    OpeningType openingType;
+    SampleParams sp;
+};
 
-typedef struct {
+struct EngineOptions {
     str_t cmd, name, *options;
-    int64_t time, increment, movetime, nodes;
-    int depth, movestogo;
-    int64_t timeoutTurn, timeoutMatch, maxMemory;
-} EngineOptions;
+    int64_t timeoutTurn, timeoutMatch, increment, nodes;
+    int depth, numThreads;
+    int64_t maxMemory;
+};
 
 EngineOptions engine_options_init(void);
 void engine_options_destroy(EngineOptions *eo);

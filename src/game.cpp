@@ -26,48 +26,27 @@
 #include "position.h"
 
 // Applies rules to generate legal moves, and determine the state of the game
-static int game_apply_rules(const Game *g, std::vector<move_t> legal_moves, std::vector<move_t> forbidden_moves)
+static int game_apply_rules(const Game *g, move_t lastmove)
 {
     Position *pos = &g->pos[g->ply];
 
-    pos->gen_all_legal_moves(legal_moves);
-    pos->compute_forbidden_moves(forbidden_moves);
-
     bool allow_long_connection = true;
-    if (g->game_rule == RENJU) {
+    if (g->game_rule == GOMOKU_EXACT_FIVE) {
         allow_long_connection = false;
+    }
+    else if (g->game_rule == RENJU) {
+        if (ColorFromMove(lastmove) == BLACK)
+            allow_long_connection = false;
     }
 
     if (pos->check_five_in_line_lastmove(allow_long_connection)) {
         return STATE_FIVE_CONNECT;
-    } else if (legal_moves.size() == 0) {
+    } else if (pos->get_moves_left() == 0) {
         return STATE_DRAW_INSUFFICIENT_SPACE;
     }
 
     // game does not end
     return STATE_NONE;
-}
-
-// moves are legal move, which are "good move"s
-static bool illegal_move(move_t move, const std::vector<move_t> moves)
-{
-    for (size_t i = 0; i < (moves.size()); i++) {
-        if (moves[i] == move) {
-            return false; // found it in legal moves, ok
-        }
-    }
-    return true; // not ok
-}
-
-// moves are forbidden move, which are "bad move"s
-static bool forbidden_move(move_t move, const std::vector<move_t> moves)
-{
-    for (size_t i = 0; i < moves.size(); i++) {
-        if (moves[i] == move) {
-            return true; // is a forbidden move, not ok
-        }
-    }
-    return false; // ok
 }
 
 void Game::game_init(int rd, int gm)
@@ -83,18 +62,23 @@ void Game::game_init(int rd, int gm)
     this->samples = vec_init(Sample);
 }
 
-bool Game::game_load_fen(str_t *fen, int *color, const Options *o)
+bool Game::game_load_fen(str_t *fen, int *color, const Options *o, size_t round)
 {
-    //vec_push(pos, (Position){0}, Position);
     Position p0(o->boardSize);
     vec_push(pos, p0, Position);
 
-    if (pos[0].apply_openning_plaintext(*fen)) {
+    if (pos[0].apply_opening(*fen, o->openingType)) {
         *color = pos[0].get_turn();
-        return true;
     } else {
         return false;
     }
+
+    if (o->transform) {
+        TransformType transType = (TransformType)(round % NB_TRANS);
+        pos[0].transform(transType);
+    }
+
+    return true;
 }
 
 void Game::game_destroy()
@@ -114,13 +98,11 @@ void Game::gomocup_turn_info_command(const EngineOptions *eo,
     scope(str_destroy) str_t cmd = str_init();
 
     str_cpy_c(&cmd, "");
-    //str_cat_fmt(&cmd, "INFO time_left %I", 1000ULL);
     str_cat_fmt(&cmd, "INFO time_left %I", timeLeft);
     engine->engine_writeln(w, cmd.buf);
-
 }
 
-void Game::gomocup_game_info_command(const EngineOptions *eo[2], int ei, 
+void Game::gomocup_game_info_command(const EngineOptions *eo,
                                      const Options *option, 
                                      Worker *w, 
                                      Engine *engine)
@@ -132,34 +114,51 @@ void Game::gomocup_game_info_command(const EngineOptions *eo[2], int ei,
     str_cat_fmt(&cmd, "INFO rule %i", option->gameRule);
     engine->engine_writeln(w, cmd.buf);
 
-    // engine specific info
-    if (eo[ei]->timeoutTurn) {
+    // time control info
+    if (eo->timeoutTurn) {
         str_cpy_c(&cmd, "");
-        str_cat_fmt(&cmd, "INFO timeout_turn %I", eo[ei]->timeoutTurn);
+        str_cat_fmt(&cmd, "INFO timeout_turn %I", eo->timeoutTurn);
         engine->engine_writeln(w, cmd.buf);
     }
 
-    if (eo[ei]->timeoutMatch) {
+    // always send match timeout info (0 means no limit in match time)
+    str_cpy_c(&cmd, "");
+    str_cat_fmt(&cmd, "INFO timeout_match %I", eo->timeoutMatch);
+    engine->engine_writeln(w, cmd.buf);
+
+    if (eo->depth) {
         str_cpy_c(&cmd, "");
-        str_cat_fmt(&cmd, "INFO timeout_match %I", eo[ei]->timeoutMatch);
+        str_cat_fmt(&cmd, "INFO max_depth %i", eo->depth);
         engine->engine_writeln(w, cmd.buf);
     }
 
-    if (eo[ei]->maxMemory) {
+    if (eo->nodes) {
         str_cpy_c(&cmd, "");
-        str_cat_fmt(&cmd, "INFO max_memory %I", eo[ei]->maxMemory);
+        str_cat_fmt(&cmd, "INFO max_node %I", eo->nodes);
         engine->engine_writeln(w, cmd.buf);
     }
-}
 
-int colorToGomocupStoneIdx(Color c) {
-    switch (c) {
-    case BLACK:
-        return 1;
-    case WHITE:
-        return 2;
+    // memory limit info
+    str_cpy_c(&cmd, "");
+    str_cat_fmt(&cmd, "INFO max_memory %I", eo->maxMemory);
+    engine->engine_writeln(w, cmd.buf);
+
+    // multi threading info
+    if (eo->numThreads > 1) {
+        str_cpy_c(&cmd, "");
+        str_cat_fmt(&cmd, "INFO thread_num %i", eo->numThreads);
+        engine->engine_writeln(w, cmd.buf);
     }
-    assert(false);
+
+    // custom info
+    scope(str_destroy) str_t left = str_init(), right = str_init();
+    for (size_t i = 0; i < vec_size(eo->options); i++) {
+        str_tok(str_tok(eo->options[i].buf, &left, "="), &right, "=");
+
+        str_cpy_c(&cmd, "");
+        str_cat_fmt(&cmd, "INFO %S %S", left, right);
+        engine->engine_writeln(w, cmd.buf);
+    }
 }
 
 void Game::send_board_command(Position *pos, Worker *w, Engine *engine)
@@ -167,17 +166,20 @@ void Game::send_board_command(Position *pos, Worker *w, Engine *engine)
     engine->engine_writeln(w, "BOARD");
 
     int moveCnt = pos->get_move_count();
-    move_t *histMoves = pos->get_hist_moves();
+    const move_t *histMoves = pos->get_hist_moves();
+
+    // make sure last color is 2 according to piskvork protocol
+    auto colorToGomocupStoneIdx = [lastColor = ColorFromMove(histMoves[moveCnt-1])](Color c) {
+        return c == lastColor ? 2 : 1;
+    };
 
     for (int i = 0; i < moveCnt; i++) {
-        Color color = getColorFromMove(histMoves[i]);
+        Color color = ColorFromMove(histMoves[i]);
         int gomocupColorIdx = colorToGomocupStoneIdx(color);
-        Pos p = getPosFromMove(histMoves[i]);
-        int x = Position::getPosX(p);
-        int y = Position::getPosY(p);
+        Pos p = PosFromMove(histMoves[i]);
         scope(str_destroy) str_t cmd = str_init();
         str_cpy_c(&cmd, "");
-        str_cat_fmt(&cmd, "%i,%i,%i", x, y, gomocupColorIdx);
+        str_cat_fmt(&cmd, "%i,%i,%i", CoordX(p), CoordY(p), gomocupColorIdx);
         engine->engine_writeln(w, cmd.buf);
     }
 
@@ -186,9 +188,11 @@ void Game::send_board_command(Position *pos, Worker *w, Engine *engine)
 
 void Game::compute_time_left(const EngineOptions *eo, int64_t *timeLeft) {
     if (eo->timeoutMatch > 0) {
-        // do nothing
+        // add increment to time left if increment is set
+        if (eo->increment > 0)
+            *timeLeft += eo->increment;
     } else {
-        (*timeLeft) = 2147483647LL;
+        *timeLeft = 2147483647LL;
     }
 }
 
@@ -216,7 +220,7 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         engines[i].engine_wait_for_ok(w);
 
         // send game info
-        gomocup_game_info_command(eo, i, o, w, &(engines[i]));
+        gomocup_game_info_command(eo[i], o, w, &(engines[i]));
     }
 
     scope(str_destroy) str_t cmd = str_init(), best = str_init();
@@ -225,6 +229,8 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
     int resignCount[NB_COLOR] = {0};
     int ei = reverse;  // engines[ei] has the move
     int64_t timeLeft[2] = {0LL, 0LL};//{eo[0]->time, eo[1]->time};
+    bool canUseTurn[2] = {false, false};
+
     scope(str_destroy) str_t pv = str_init();
 
     // init time control
@@ -234,9 +240,6 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
     // the starting position has been added at game_load_fen()
 
     for (ply = 0; ; ei = (1 - ei), ply++) {
-        std::vector<move_t> legalMoves;
-        std::vector<move_t> forbiddenMoves;
-
         if (played != NONE_MOVE) {
             Position::pos_move_with_copy(&pos[ply], &pos[ply - 1], played);
         }
@@ -245,11 +248,14 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
             pos[ply].pos_print();
         }
 
-        state = game_apply_rules(this, legalMoves, forbiddenMoves);
+        state = game_apply_rules(this, played);
         if (state > STATE_NONE) {
-            if (o->debug) {
-                pos[ply].pos_print();
-            }
+            break;
+        }
+
+        // Apply force draw adjudication rule
+        if (o->forceDrawAfter && pos[ply].get_move_count() >= o->forceDrawAfter) {
+            state = STATE_DRAW_ADJUDICATION;
             break;
         }
 
@@ -262,20 +268,21 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         // trigger think!
         if (pos[ply].get_move_count() == 0) {
             engines[ei].engine_writeln(w, "BEGIN");
+            canUseTurn[ei] = true;
         } else {
-            if (o->useTURN) { // use TURN to trigger think
-                assert(ply == pos[ply].get_move_count()); // Can not do TURN when game history is unknown   
-                std::string last_move_str = pos[ply].move_to_gomostr(played);
-                std::string turn_cmd = std::string("TURN ") + last_move_str;
-                char tmp[32];
-                strcpy(tmp, turn_cmd.c_str());
+            if (o->useTURN && canUseTurn[ei]) { // use TURN to trigger think
+                str_cpy_c(&cmd, "");
+                str_cat_fmt(&cmd, "TURN %s", pos[ply].move_to_gomostr(played).c_str());
+                engines[ei].engine_writeln(w, cmd.buf);
             } else { // use BOARD to trigger think
                 send_board_command(&(pos[ply]), w, &(engines[ei]));
+                canUseTurn[ei] = true;
             }
         }
 
         Info info = {0};
-        const bool ok = engines[ei].engine_bestmove(w, &timeLeft[ei], eo[ei]->timeoutTurn, &best, &pv, &info);
+        const bool ok = engines[ei].engine_bestmove(w, &timeLeft[ei], eo[ei]->timeoutTurn,
+                                                    &best, &pv, &info, pos[ply].get_move_count() + 1);
         vec_push(this->info, info, Info);
 
         // Parses the last PV sent. An invalid PV is not fatal, but logs some warnings. Keep track
@@ -290,18 +297,18 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
 
         played = pos[ply].gomostr_to_move(best.buf);
 
-        if (forbidden_move(played, forbiddenMoves)) {
-            state = STATE_FORBIDDEN_MOVE;
-            break;
-        }
-
         if (!pos[ply].is_legal_move(played)) {
             std::cout << "Illegal move: " << best.buf << std::endl;
             state = STATE_ILLEGAL_MOVE;
             break;
         }
 
-        if ((eo[ei]->time || eo[ei]->increment || eo[ei]->movetime) && timeLeft[ei] < 0) {
+        if (game_rule == RENJU && pos[ply].is_forbidden_move(played)) {
+            state = STATE_FORBIDDEN_MOVE;
+            break;
+        }
+
+        if ((eo[ei]->timeoutTurn || eo[ei]->timeoutMatch || eo[ei]->increment) && timeLeft[ei] < 0) {
             state = STATE_TIME_LOSS;
             break;
         }
@@ -326,10 +333,19 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
             resignCount[ei] = 0;
         }
 
-        vec_push(pos, (Position){0}, Position);
+        // Write sample: position (compactly encoded) + move
+        if (o->sp.fileName.len && prngf(&w->seed) <= o->sp.freq) {
+            Sample sample = {
+                .pos = pos[ply],
+                .move = played,
+                .result = NB_RESULT  // mark as invalid for now, computed after the game
+            };
 
-        legalMoves.clear();
-        forbiddenMoves.clear();
+            // Record sample.
+            vec_push(samples, sample, Sample);
+        }
+
+        vec_push(pos, (Position){0}, Position);
     }
 
     assert(state != STATE_NONE);
@@ -339,14 +355,28 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         ? (pos[ply].get_turn() == BLACK ? RESULT_LOSS : RESULT_WIN)  // lost from turn's pov
         : RESULT_DRAW;
 
+    // Fill results in samples
+    if (state == STATE_TIME_LOSS || state == STATE_ILLEGAL_MOVE) {
+        vec_clear(samples); // discard samples in a time loss/illegal move game
+    } else {
+        for (size_t i = 0; i < vec_size(samples); i++)
+            samples[i].result = samples[i].pos.get_turn() == WHITE ? wpov : 2 - wpov;
+    }
+
     return state < STATE_SEPARATOR
         ? (ei == 0 ? RESULT_LOSS : RESULT_WIN)  // engine on the move has lost
         : RESULT_DRAW;
 }
 
-void Game::game_decode_state(str_t *result, str_t *reason)
+void Game::game_decode_state(str_t *result, str_t *reason, const char* restxt[3]) const
 {
-    str_cpy_c(result, "1/2-1/2");
+    const char* DefaultResultTxt[3] = {
+        "0-1", "1/2-1/2", "1-0"
+    };
+    if (!restxt)
+        restxt = DefaultResultTxt;
+
+    str_cpy_c(result, restxt[RESULT_DRAW]);
     str_clear(reason);
 
     // Note: pos.get_turn() returns next side to move, so when pos is a win position
@@ -357,39 +387,38 @@ void Game::game_decode_state(str_t *result, str_t *reason)
         str_cpy_c(result, "*");
         str_cpy_c(reason, "Unterminated");
     } else if (state == STATE_FIVE_CONNECT) {
-        str_cpy_c(result, pos[ply].get_turn() == BLACK ? "0-1" : "1-0");
+        str_cpy_c(result, pos[ply].get_turn() == BLACK ? restxt[RESULT_LOSS] : restxt[RESULT_WIN]);
         str_cpy_c(reason, pos[ply].get_turn() == BLACK ? "White win by five connection" : 
                                                          "Black win by five connection");
     } else if (state == STATE_DRAW_INSUFFICIENT_SPACE)
         str_cpy_c(reason, "Draw by fullfilled board");
     else if (state == STATE_ILLEGAL_MOVE) {
-        str_cpy_c(result, pos[ply].get_turn() == BLACK ? "0-1" : "1-0");
+        str_cpy_c(result, pos[ply].get_turn() == BLACK ? restxt[RESULT_LOSS] : restxt[RESULT_WIN]);
         str_cpy_c(reason, pos[ply].get_turn() == BLACK ? "White win by opponent illegal move" :
                                                          "Black win by opponent illegal move");
     } else if (state == STATE_FORBIDDEN_MOVE) {
-        //str_cpy_c(result, pos[ply].turn == BLACK ? "0-1" : "1-0");
         assert(pos[ply].get_turn() == BLACK);
-        str_cpy_c(result, "0-1");
-        str_cpy_c(reason, "black play on forbidden position");
+        str_cpy_c(result, restxt[RESULT_LOSS]);
+        str_cpy_c(reason, "Black play on forbidden position");
     } else if (state == STATE_DRAW_ADJUDICATION)
         str_cpy_c(reason, "Draw by adjudication");
     else if (state == STATE_RESIGN) {
-        str_cpy_c(result, pos[ply].get_turn() == BLACK ? "0-1" : "1-0");
+        str_cpy_c(result, pos[ply].get_turn() == BLACK ? restxt[RESULT_LOSS] : restxt[RESULT_WIN]);
         str_cpy_c(reason, pos[ply].get_turn() == BLACK ? "White win by adjudication" :
                                                          "Black win by adjudication");
     } else if (state == STATE_TIME_LOSS) {
-        str_cpy_c(result, pos[ply].get_turn() == BLACK ? "0-1" : "1-0");
+        str_cpy_c(result, pos[ply].get_turn() == BLACK ? restxt[RESULT_LOSS] : restxt[RESULT_WIN]);
         str_cpy_c(reason, pos[ply].get_turn() == BLACK ? "White win by time forfeit" : 
                                                          "Black win by time forfeit");
     } else
         assert(false);
 }
 
-
-void Game::game_export_pgn(int verbosity, str_t *out)
+void Game::game_export_pgn(size_t gameIdx, int verbosity, str_t *out) const
 {
-    str_cat_fmt(out, "[Event \"?\"]\n");
-    str_cat_fmt(out, "[Site \"?\"]\n");
+    // Record game id as event name for each game
+    str_cat_fmt(out, "[Event \"%I\"]\n", gameIdx);
+    //str_cat_fmt(out, "[Site \"?\"]\n");
 
     time_t rawtime;
     struct tm * timeinfo;
@@ -410,7 +439,6 @@ void Game::game_export_pgn(int verbosity, str_t *out)
     str_cat_fmt(out, "[Termination \"%S\"]\n", reason);
 
     str_cat_fmt(out, "[PlyCount \"%i\"]\n", ply);
-    scope(str_destroy) str_t san = str_init();
 
     if (verbosity > 0) {
         // Print the moves
@@ -431,14 +459,17 @@ void Game::game_export_pgn(int verbosity, str_t *out)
     str_cat_c(str_cat(out, result), "\n\n");
 }
 
-void Game::game_export_sgf(str_t *out)
+void Game::game_export_sgf(size_t gameIdx, str_t *out) const
 {
     const int movePerline = 8;
 
     str_cat_c(out, "(");
     str_cat_c(out, ";FF[4]GM[4]"); // common info
     
-    str_cat_c(out, "EV[?]");
+    // Record game id as game name for each game
+    str_cat_fmt(out, "GN[%I]", gameIdx);
+    // Record engine pair as event name for each game
+    str_cat_fmt(out, "EV[%S x %S]", names[BLACK], names[WHITE]);
     time_t rawtime;
     struct tm * timeinfo;
     char timeBuffer[128];
@@ -449,19 +480,16 @@ void Game::game_export_sgf(str_t *out)
     str_cat_fmt(out, "RO[%i.%i]", round + 1, game + 1);
     str_cat_fmt(out, "RU[%i]", game_rule);
     str_cat_fmt(out, "SZ[%i]", board_size);
-    str_cat_fmt(out, "TM[%s]", "0000");
-    str_cat_fmt(out, "BP[%S]", names[BLACK]);
-    str_cat_fmt(out, "WP[%S]", names[WHITE]);
+    //str_cat_fmt(out, "TM[%s]", "0000");
+    str_cat_fmt(out, "PB[%S]", names[BLACK]);
+    str_cat_fmt(out, "PW[%S]", names[WHITE]);
 
-    // Result in PGN format "1-0", "0-1", "1/2-1/2" (from white pov)
+    // Result in SGF format "W+score", "0", "B+score"
+    const char* ResultTxt[3] = { "W+1", "0", "B+1" };
     scope(str_destroy) str_t result = str_init(), reason = str_init();
-    game_decode_state(&result, &reason);
+    game_decode_state(&result, &reason, ResultTxt);
     str_cat_fmt(out, "RE[%S]", result);
     str_cat_fmt(out, "TE[%S]", reason);
-
-    //str_cat_fmt(out, "[PlyCount \"%i\"]\n", ply);
-    scope(str_destroy) str_t san = str_init();
-
     str_push(out, '\n');
 
     // Print the moves
@@ -470,10 +498,9 @@ void Game::game_export_sgf(str_t *out)
     // openning moves
     int openingMoveCnt = lastPos->get_move_count() - ply;
 
-
     // played moves
     int moveCnt = 0;
-    move_t* histMove = lastPos->get_hist_moves();
+    const move_t* histMove = lastPos->get_hist_moves();
     for (int j = 0; j < lastPos->get_move_count(); j++) {
         int thinkPly = j - openingMoveCnt;
         if (openingMoveCnt > 0 && thinkPly == 0) {
@@ -485,12 +512,12 @@ void Game::game_export_sgf(str_t *out)
         }
         str_push(out, ';');
     
-        Color color = getColorFromMove(histMove[j]);
-        Pos p = getPosFromMove(histMove[j]);
+        Color color = ColorFromMove(histMove[j]);
+        Pos p = PosFromMove(histMove[j]);
     
         char coord[3];
-        coord[0] = (char)(Position::getPosX(p) + 'a');
-        coord[1] = (char)(Position::getPosY(p) + 'a');
+        coord[0] = (char)(CoordX(p) + 'a');
+        coord[1] = (char)(CoordY(p) + 'a');
         coord[2] = '\0';
         if (color == BLACK) {
             str_cat_fmt(out, "B[%s]", coord);
@@ -512,4 +539,58 @@ void Game::game_export_sgf(str_t *out)
     }
 
     str_cat_c(out, ")\n\n");
+}
+
+void Game::game_export_samples_csv(FILE *out) const
+{
+    for (size_t i = 0; i < vec_size(samples); i++) {
+        std::string pos_str = samples[i].pos.to_opening_str(OPENING_POS);
+        std::string move_str = samples[i].pos.move_to_opening_str(samples[i].move, OPENING_POS);
+        fprintf(out, "%s,%s,%d\n", pos_str.c_str(), move_str.c_str(), samples[i].result);
+    }
+}
+
+void Game::game_export_samples_bin(FILE *out, LZ4F_compressionContext_t lz4Ctx) const
+{
+    struct Entry {
+        struct EntryHead {
+            uint16_t boardsize : 5;	// board size
+            uint16_t ply : 9;		// current number of stones on board
+            uint16_t result : 2;	// final game result: 0=loss, 1=draw, 2=win
+            uint16_t move;			// move output by the engine
+        } head;
+        uint16_t position[1024];	// move sequence that representing a position
+    } e;
+    const size_t bufSize = LZ4F_compressBound(sizeof(Entry), nullptr);
+    char buf[bufSize];
+
+    for (size_t i = 0; i < vec_size(samples); i++) {
+        int ply = samples[i].pos.get_move_count();
+        const move_t *hist_moves = samples[i].pos.get_hist_moves();
+        assert(ply < 1024);
+        
+        e.head.boardsize = samples[i].pos.get_size();
+        e.head.ply = ply;
+        e.head.result = samples[i].result;
+        e.head.move = samples[i].move;
+        for (int iMove = 0; iMove < ply; iMove++) {
+            e.position[iMove] = PosFromMove(hist_moves[iMove]);
+        }
+
+        const size_t entrySize = sizeof(Entry::EntryHead) + sizeof(uint16_t) * ply;
+        if (lz4Ctx) {
+            size_t size = LZ4F_compressUpdate(lz4Ctx, buf, bufSize, &e, entrySize, nullptr);
+            fwrite(buf, size, 1, out);
+        } else {
+            fwrite(&e, entrySize, 1, out);
+        }
+    }
+}
+
+void Game::game_export_samples(FILE *out, bool bin, LZ4F_compressionContext_t lz4Ctx) const
+{
+    if (bin)
+        game_export_samples_bin(out, lz4Ctx);
+    else
+        game_export_samples_csv(out);
 }

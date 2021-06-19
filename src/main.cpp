@@ -28,12 +28,17 @@
 #include "util.h"
 #include "vec.h"
 #include "workers.h"
+#include "extern/lz4frame.h"
 
 static Options options;
 static EngineOptions *eo;
 static Openings openings;
 static SeqWriter pgnSeqWriter;
 static SeqWriter sgfSeqWriter;
+static SeqWriter msgSeqWriter;
+static FILE *sampleFile;
+static LZ4F_compressionContext_t sampleFileLz4Ctx;
+static pthread_mutex_t sampleFileMtx;
 static JobQueue jq;
 
 static void main_destroy(void)
@@ -43,11 +48,26 @@ static void main_destroy(void)
     }
     Workers.clear();
 
+    if (options.sp.fileName.len) {
+        if (options.sp.compress) {
+            // Flush LZ4 tails and release LZ4 context
+            const size_t bufSize = LZ4F_compressBound(0, nullptr);
+            char buf[bufSize];
+            size_t size = LZ4F_compressEnd(sampleFileLz4Ctx, buf, bufSize, nullptr);
+            fwrite(buf, 1, size, sampleFile);
+            LZ4F_freeCompressionContext(sampleFileLz4Ctx);
+        }
+        fclose(sampleFile);
+    }
+
     if (options.pgn.len)
         pgnSeqWriter.seq_writer_destroy();
 
     if (options.sgf.len)
         sgfSeqWriter.seq_writer_destroy();
+
+    if (options.msg.len)
+        msgSeqWriter.seq_writer_destroy();
 
     openings.openings_destroy(0);
     jq.job_queue_destroy();
@@ -68,12 +88,28 @@ static void main_init(int argc, const char **argv)
     jq.job_queue_init(vec_size(eo), options.rounds, options.games, options.gauntlet);
     openings.openings_init(options.openings.buf, options.random, options.srand, 0);
 
-    if (options.pgn.len) {
+    if (options.pgn.len)
         pgnSeqWriter.seq_writer_init(options.pgn.buf, FOPEN_APPEND_MODE);
-    }
 
-    if (options.sgf.len) {
+    if (options.sgf.len)
         sgfSeqWriter.seq_writer_init(options.sgf.buf, FOPEN_APPEND_MODE);
+
+    if (options.msg.len)
+        msgSeqWriter.seq_writer_init(options.msg.buf, FOPEN_APPEND_MODE);
+
+    if (options.sp.fileName.len) {
+        if (options.sp.compress) {
+            DIE_IF(0, !(sampleFile = fopen(options.sp.fileName.buf, FOPEN_WRITE_BINARY_MODE)));
+            // Init LZ4 context and write file headers
+            DIE_IF(0, LZ4F_isError(LZ4F_createCompressionContext(&sampleFileLz4Ctx, LZ4F_VERSION)));
+            char buf[LZ4F_HEADER_SIZE_MAX];
+            size_t headerSize = LZ4F_compressBegin(sampleFileLz4Ctx, buf, sizeof(buf), nullptr);
+            fwrite(buf, sizeof(char), headerSize, sampleFile);
+        } else if (options.sp.bin) {
+            DIE_IF(0, !(sampleFile = fopen(options.sp.fileName.buf, FOPEN_APPEND_BINARY_MODE)));
+        } else {
+            DIE_IF(0, !(sampleFile = fopen(options.sp.fileName.buf, FOPEN_APPEND_MODE)));
+        }
     }
 
     // Prepare Workers[]
@@ -96,11 +132,19 @@ static void *thread_start(void *arg)
     Engine engines[2] = {0};
 
     scope(str_destroy) str_t fen = str_init();
+    scope(str_destroy) str_t messages = str_init();
+    str_t *msg = options.msg.len ? &messages : nullptr;
     Job job = {0};
     int ei[2] = {-1, -1};  // eo[ei[0]] plays eo[ei[1]]: initialize with invalid values to start
     size_t idx = 0, count = 0;  // game idx and count (shared across workers)
 
     while (jq.job_queue_pop(&job, &idx, &count)) {
+        // Clear all previous engine messages and write game index
+        if (msg) {
+            str_cpy_c(msg, "------------------------------\n");
+            str_cat_fmt(msg, "Game ID: %I\n", idx + 1);
+        }
+
         // Engine stop/start, as needed
         for (int i = 0; i < 2; i++) {
             if (job.ei[i] != ei[i]) {
@@ -109,44 +153,62 @@ static void *thread_start(void *arg)
                 }
 
                 ei[i] = job.ei[i];
-                engines[i].engine_init(w, eo[ei[i]].cmd.buf, eo[ei[i]].name.buf, eo[ei[i]].options, options.debug);
+                engines[i].engine_init(w, eo[ei[i]].cmd.buf, eo[ei[i]].name.buf, options.debug, msg);
                 jq.job_queue_set_name(ei[i], engines[i].name.buf);
             }
         }
     
         // Choose opening position
-        openings.openings_next(&fen, options.repeat ? idx / 2 : idx, w->id);
+        size_t openingRound;
+        openings.openings_next(&fen, &openingRound, options.repeat ? idx / 2 : idx, w->id);
 
         // Play 1 game
         Game game;
         game.game_init(job.round, job.game);
         int color = BLACK; // black play first in gomoku/renju by default
 
-        if (!game.game_load_fen(&fen, &color, &options)) {
+        if (!game.game_load_fen(&fen, &color, &options, openingRound)) {
             DIE("[%d] illegal FEN '%s'\n", w->id, fen.buf);
         }
 
         const int blackIdx = color ^ job.reverse;
+        const int whiteIdx = oppositeColor((Color)blackIdx);
 
         printf("[%d] Started game %zu of %zu (%s vs %s)\n", w->id, idx + 1, count,
-            engines[blackIdx].name.buf, engines[oppositeColor((Color)blackIdx)].name.buf);
+            engines[blackIdx].name.buf, engines[whiteIdx].name.buf);
+
+        if (msg)
+            str_cat_fmt(msg, "Engines: %S x %S\n", engines[blackIdx].name, engines[whiteIdx].name);
 
         const EngineOptions *eoPair[2] = {&eo[ei[0]], &eo[ei[1]]};
         const int wld = game.game_play(w, &options, engines, eoPair, job.reverse);
 
-        // Write to PGN file
-        if (options.pgn.len) {
-            int pgnVerbosity = 3;
-            scope(str_destroy) str_t pgnText = str_init();
-            game.game_export_pgn(pgnVerbosity, &pgnText);
-            pgnSeqWriter.seq_writer_push(idx, pgnText);
-        }
+        if (!options.gauntlet || !options.saveLoseOnly || wld == RESULT_LOSS) {
+            // Write to PGN file
+            if (options.pgn.len) {
+                const int pgnVerbosity = 0;
+                scope(str_destroy) str_t pgnText = str_init();
+                game.game_export_pgn(idx + 1, pgnVerbosity, &pgnText);
+                pgnSeqWriter.seq_writer_push(idx, pgnText);
+            }
 
-        // Write to SGF file
-        if (options.sgf.len) {
-            scope(str_destroy) str_t sgfText = str_init();
-            game.game_export_sgf(&sgfText);
-            sgfSeqWriter.seq_writer_push(idx, sgfText);
+            // Write to SGF file
+            if (options.sgf.len) {
+                scope(str_destroy) str_t sgfText = str_init();
+                game.game_export_sgf(idx + 1, &sgfText);
+                sgfSeqWriter.seq_writer_push(idx, sgfText);
+            }
+
+            // Write engine messages to TXT file
+            if (msg)
+                msgSeqWriter.seq_writer_push(idx, messages);
+
+            // Write to Sample file
+            if (options.sp.fileName.len) {
+                pthread_mutex_lock(&sampleFileMtx); // lock sample file before writing
+                game.game_export_samples(sampleFile, options.sp.bin, sampleFileLz4Ctx);
+                pthread_mutex_unlock(&sampleFileMtx);
+            }
         }
 
         // Write to stdout a one line summary of the game
@@ -154,7 +216,7 @@ static void *thread_start(void *arg)
         game.game_decode_state(&result, &reason);
 
         printf("[%d] Finished game %zu (%s vs %s): %s {%s}\n", w->id, idx + 1,
-            engines[blackIdx].name.buf, engines[oppositeColor((Color)blackIdx)].name.buf, result.buf, reason.buf);
+            engines[blackIdx].name.buf, engines[whiteIdx].name.buf, result.buf, reason.buf);
 
         // Pair update
         int wldCount[3] = {0};

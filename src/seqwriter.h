@@ -39,4 +39,7 @@ public:
 
     void seq_writer_destroy();
     void seq_writer_push(size_t idx, str_t str);
+
+private:
+    void write_to_i(size_t i);
 };
