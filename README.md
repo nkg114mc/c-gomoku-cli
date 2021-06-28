@@ -85,6 +85,8 @@ c-gomoku-cli -each tc=180/30 \
 
  * `thread=N`: Number of threads a engine can use. Default value is `1`. This is an extension option[^1], may not be supported by all engines.
 
+ * `tolerance=N`: Tolerance (in seconds) to determine when an engine hangs (which is an unrecoverable error at this point). Default value is `N=3`.
+
  * `option.O=V`: Set a raw protocol info. Command `INFO [O] [V]` will be sent to the engine before each game starts.
 
    [^1]: Yixin-Board extension protocol: https://github.com/accreator/Yixin-protocol/blob/master/protocol.pdf
