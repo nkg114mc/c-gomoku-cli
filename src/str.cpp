@@ -317,14 +317,15 @@ size_t str_getline(str_t *out, FILE *in)
     str_resize(out, 0);
     int c;
 
-#ifndef __MINGW32__
+#ifdef __MINGW32__
+    _lock_file(in);
+#else
     flockfile(in);
 #endif
 
     while (true) {
 #ifdef __MINGW32__
-        // TODO: find a faster replacement under windows
-        c = getc(in);
+        c = _getc_nolock(in);
 #else
         c = getc_unlocked(in);
 #endif
@@ -335,7 +336,9 @@ size_t str_getline(str_t *out, FILE *in)
             break;
     }
 
-#ifndef __MINGW32__
+#ifdef __MINGW32__
+    _unlock_file(in);
+#else
     funlockfile(in);
 #endif
 
