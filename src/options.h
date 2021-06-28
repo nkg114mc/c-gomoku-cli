@@ -51,6 +51,7 @@ struct EngineOptions {
     int64_t timeoutTurn, timeoutMatch, increment, nodes;
     int depth, numThreads;
     int64_t maxMemory;
+    int64_t tolerance;
 };
 
 EngineOptions engine_options_init(void);

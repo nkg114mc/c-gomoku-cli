@@ -46,9 +46,7 @@
 #include "position.h"
 
 static void engine_spawn(const Worker *w, Engine *e, 
-    [[maybe_unused]] const char *cmd, const char *cwd, 
-    [[maybe_unused]] const char *run, [[maybe_unused]] char **argv, 
-    bool readStdErr)
+    const char *cwd, const char *run, char **argv, bool readStdErr)
 {
     assert(argv[0]);
 
@@ -95,12 +93,23 @@ static void engine_spawn(const Worker *w, Engine *e,
         siStartInfo.hStdError = p_stdout[1];
     siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
 
+    // Construct full commandline using run and argv
+    char fullrun[MAX_PATH];
     char fullcmd[32768];
-    strcpy_s(fullcmd, cmd);
-    const int flag = CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS;
+    strcpy_s(fullrun, cwd);
+    strcat_s(fullrun, run + 1); // we need an path relative to the cli
 
+    // Use an absolute path for engine argv[0]
+    strcpy_s(fullcmd, std::filesystem::absolute(fullrun).string().c_str()); 
+    for (size_t i = 1; argv[i]; i++) {  // argv[0] == run
+        strcat_s(fullcmd, " ");
+        strcat_s(fullcmd, argv[i]);
+    }
+
+    const int flag = CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS;
+    // FIXME: fullrun, fullcmd, cwd conversion to LPCWSTR
     if (!CreateProcess(
-        NULL,           // application name
+        fullrun,        // application name
         fullcmd,        // command line (non-const)
         NULL,           // process security attributes
         NULL,           // primary thread security attributes
@@ -111,7 +120,7 @@ static void engine_spawn(const Worker *w, Engine *e,
         &siStartInfo,   // STARTUPINFO pointer
         &piProcInfo     // receives PROCESS_INFORMATION
     ))
-        DIE("fail to execute engine cmdline %s\n", cmd);
+        DIE("Fail to execute engine %s\n", fullrun);
 
     // Keep the handle to the child process
     e->pid = piProcInfo.dwProcessId;
@@ -242,7 +251,7 @@ void Engine::engine_init(Worker *w, const char *cmd, const char *engname, bool d
     }
 
     // Spawn child process and plug pipes
-    engine_spawn(w, this, cmd, cwd.buf, run.buf, argv, w->log != NULL);
+    engine_spawn(w, this, cwd.buf, run.buf, argv, w->log != NULL);
 
     vec_destroy_rec(args, str_destroy);
     free(argv);
@@ -259,7 +268,7 @@ void Engine::engine_destroy(Worker *w)
     }
 
     // Order the engine to quit, and grant 1s deadline for obeying
-    w->deadline_set(name.buf, system_msec() + 1000);
+    w->deadline_set(name.buf, system_msec() + tolerance);
     engine_writeln(w, "END");
 
 #ifdef __MINGW32__
@@ -300,7 +309,7 @@ void Engine::engine_writeln(const Worker *w, const char *buf)
 
 void Engine::engine_wait_for_ok(Worker *w)
 {
-    w->deadline_set(name.buf, system_msec() + 4000);
+    w->deadline_set(name.buf, system_msec() + tolerance);
     scope(str_destroy) str_t line = str_init();
 
     do {
@@ -331,9 +340,9 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
         turnTimeLeft = min(*timeLeft, maxTurnTime);
     }
     
-    w->deadline_set(name.buf, turnTimeLimit + 1000);
+    w->deadline_set(name.buf, turnTimeLimit + tolerance);
 
-    while ((turnTimeLeft + 1000) >= 0 && !result) {
+    while ((turnTimeLeft + tolerance) >= 0 && !result) {
         engine_readln(w, &line);
 
         const int64_t now = system_msec();
@@ -433,7 +442,7 @@ static void parse_and_display_engine_about(str_t &line, str_t* engine_name) {
 
 // process engine ABOUT command
 void Engine::engine_about(Worker *w, const char* fallbackName) {
-    w->deadline_set(*name.buf ? name.buf : fallbackName, system_msec() + 2000);
+    w->deadline_set(*name.buf ? name.buf : fallbackName, system_msec() + tolerance);
     engine_writeln(w, "ABOUT");
     scope(str_destroy) str_t line = str_init();
 

@@ -72,6 +72,8 @@ static int options_parse_eo(int argc, const char **argv, int i, EngineOptions *e
             eo->maxMemory = (int64_t)(atof(tail));
         } else if ((tail = str_prefix(argv[i], "thread="))) {
             eo->numThreads = atoi(tail);
+        } else if ((tail = str_prefix(argv[i], "tolerance="))) {
+            eo->tolerance = (int64_t)(atof(tail) * 1000);
         } else if ((tail = str_prefix(argv[i], "option."))) {
             vec_push(eo->options, str_init_from_c(tail), str_t);  // store "name=value" string
         } else {
@@ -212,6 +214,8 @@ EngineOptions engine_options_init(void)
     eo.maxMemory = 367001600;
     // default thread num is 1
     eo.numThreads = 1;
+    // default tolerance is 3
+    eo.tolerance = 3000;
 
     return eo;
 }
@@ -412,6 +416,7 @@ void options_print(Options *o, EngineOptions **eo) {
         std::cout << "increment = " << e1->increment << std::endl;
         std::cout << "maxMemory = " << e1->maxMemory << std::endl;
         std::cout << "thread = " << e1->numThreads << std::endl;
+        std::cout << "tolerance = " << e1->tolerance << std::endl;
         for (size_t i = 0; i < vec_size(e1->options); i++) {
             std::cout << "option." << e1->options[i].buf << std::endl;
         }

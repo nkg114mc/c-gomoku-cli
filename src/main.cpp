@@ -148,11 +148,13 @@ static void *thread_start(void *arg)
         // Engine stop/start, as needed
         for (int i = 0; i < 2; i++) {
             if (job.ei[i] != ei[i]) {
+                ei[i] = job.ei[i];
+                engines[i].tolerance = eo[ei[i]].tolerance;
+
                 if (engines[i].pid) {
                     engines[i].engine_destroy(w);
                 }
 
-                ei[i] = job.ei[i];
                 engines[i].engine_init(w, eo[ei[i]].cmd.buf, eo[ei[i]].name.buf, options.debug, msg);
                 jq.job_queue_set_name(ei[i], engines[i].name.buf);
             }
