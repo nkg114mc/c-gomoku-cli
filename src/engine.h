@@ -44,6 +44,7 @@ public:
     FILE *in, *out;
     str_t name;
     str_t *messages;
+    int64_t tolerance;
     bool isDebug;
     char pad[3];
 

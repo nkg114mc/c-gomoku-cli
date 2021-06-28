@@ -265,7 +265,7 @@ void Engine::engine_destroy(Worker *w)
     }
 
     // Order the engine to quit, and grant 1s deadline for obeying
-    w->deadline_set(name.buf, system_msec() + 1000);
+    w->deadline_set(name.buf, system_msec() + tolerance);
     engine_writeln(w, "END");
 
 #ifdef __MINGW32__
@@ -306,7 +306,7 @@ void Engine::engine_writeln(const Worker *w, const char *buf)
 
 void Engine::engine_wait_for_ok(Worker *w)
 {
-    w->deadline_set(name.buf, system_msec() + 4000);
+    w->deadline_set(name.buf, system_msec() + tolerance);
     scope(str_destroy) str_t line = str_init();
 
     do {
@@ -337,9 +337,9 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
         turnTimeLeft = min(*timeLeft, maxTurnTime);
     }
     
-    w->deadline_set(name.buf, turnTimeLimit + 1000);
+    w->deadline_set(name.buf, turnTimeLimit + tolerance);
 
-    while ((turnTimeLeft + 1000) >= 0 && !result) {
+    while ((turnTimeLeft + tolerance) >= 0 && !result) {
         engine_readln(w, &line);
 
         const int64_t now = system_msec();
@@ -439,7 +439,7 @@ static void parse_and_display_engine_about(str_t &line, str_t* engine_name) {
 
 // process engine ABOUT command
 void Engine::engine_about(Worker *w, const char* fallbackName) {
-    w->deadline_set(*name.buf ? name.buf : fallbackName, system_msec() + 2000);
+    w->deadline_set(*name.buf ? name.buf : fallbackName, system_msec() + tolerance);
     engine_writeln(w, "ABOUT");
     scope(str_destroy) str_t line = str_init();
 
