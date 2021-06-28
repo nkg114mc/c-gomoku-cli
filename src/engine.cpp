@@ -31,6 +31,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <filesystem>
 #include <assert.h>
 #include <limits.h>
 #include <pthread.h>
@@ -96,15 +97,17 @@ static void engine_spawn(const Worker *w, Engine *e,
     char fullrun[MAX_PATH];
     char fullcmd[32768];
     strcpy_s(fullrun, cwd);
-    strcat_s(fullrun, run + 1); // we need an absolute path to execute the engine
+    strcat_s(fullrun, run + 1); // we need an path relative to the cli
 
-    strcpy_s(fullcmd, run); // a reletive path for engine argv[0]
+    // Use an absolute path for engine argv[0]
+    strcpy_s(fullcmd, std::filesystem::absolute(fullrun).string().c_str()); 
     for (size_t i = 1; argv[i]; i++) {  // argv[0] == run
         strcat_s(fullcmd, " ");
         strcat_s(fullcmd, argv[i]);
     }
 
     const int flag = CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS;
+    // FIXME: fullrun, fullcmd, cwd conversion to LPCWSTR
     if (!CreateProcess(
         fullrun,        // application name
         fullcmd,        // command line (non-const)
