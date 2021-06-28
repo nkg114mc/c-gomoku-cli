@@ -371,7 +371,7 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
 void Game::game_decode_state(str_t *result, str_t *reason, const char* restxt[3]) const
 {
     const char* DefaultResultTxt[3] = {
-        "0-1", "1/2-1/2", "1-0"
+        "1-0", "1/2-1/2", "0-1"
     };
     if (!restxt)
         restxt = DefaultResultTxt;
