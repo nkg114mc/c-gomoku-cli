@@ -31,7 +31,6 @@
 
 #include <iostream>
 #include <sstream>
-#include <filesystem>
 #include <assert.h>
 #include <limits.h>
 #include <pthread.h>
@@ -46,9 +45,7 @@
 #include "position.h"
 
 static void engine_spawn(const Worker *w, Engine *e, 
-    [[maybe_unused]] const char *cmd, const char *cwd, 
-    [[maybe_unused]] const char *run, [[maybe_unused]] char **argv, 
-    bool readStdErr)
+    const char *cwd, const char *run, char **argv, bool readStdErr)
 {
     assert(argv[0]);
 
@@ -95,12 +92,21 @@ static void engine_spawn(const Worker *w, Engine *e,
         siStartInfo.hStdError = p_stdout[1];
     siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
 
+    // Construct full commandline using run and argv
+    char fullrun[MAX_PATH];
     char fullcmd[32768];
-    strcpy_s(fullcmd, cmd);
-    const int flag = CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS;
+    strcpy_s(fullrun, cwd);
+    strcat_s(fullrun, run + 1); // we need an absolute path to execute the engine
 
+    strcpy_s(fullcmd, run); // a reletive path for engine argv[0]
+    for (size_t i = 1; argv[i]; i++) {  // argv[0] == run
+        strcat_s(fullcmd, " ");
+        strcat_s(fullcmd, argv[i]);
+    }
+
+    const int flag = CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS;
     if (!CreateProcess(
-        NULL,           // application name
+        fullrun,        // application name
         fullcmd,        // command line (non-const)
         NULL,           // process security attributes
         NULL,           // primary thread security attributes
@@ -111,7 +117,7 @@ static void engine_spawn(const Worker *w, Engine *e,
         &siStartInfo,   // STARTUPINFO pointer
         &piProcInfo     // receives PROCESS_INFORMATION
     ))
-        DIE("fail to execute engine cmdline %s\n", cmd);
+        DIE("Fail to execute engine %s\n", fullrun);
 
     // Keep the handle to the child process
     e->pid = piProcInfo.dwProcessId;
@@ -242,7 +248,7 @@ void Engine::engine_init(Worker *w, const char *cmd, const char *engname, bool d
     }
 
     // Spawn child process and plug pipes
-    engine_spawn(w, this, cmd, cwd.buf, run.buf, argv, w->log != NULL);
+    engine_spawn(w, this, cwd.buf, run.buf, argv, w->log != NULL);
 
     vec_destroy_rec(args, str_destroy);
     free(argv);
