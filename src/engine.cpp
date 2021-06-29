@@ -398,7 +398,9 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
         do {
             if (!engine_readln(w, &line, false))
                 return false;
-            engine_process_message_ifneeded(line.buf);
+
+            if (this->isDebug)
+                engine_process_message_ifneeded(line.buf);
         } while (!Position::is_valid_move_gomostr(line.buf));
     }
 
