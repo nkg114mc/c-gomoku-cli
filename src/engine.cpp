@@ -279,8 +279,12 @@ void Engine::engine_destroy(Worker *w)
     engine_writeln(w, "END");
 
 #ifdef __MINGW32__
-    WaitForSingleObject((HANDLE)hProcess, INFINITE);
-    CloseHandle((HANDLE)hProcess);
+    int result = WaitForSingleObject(hProcess, tolerance);
+    DIE_IF(w->id, result == WAIT_FAILED);
+    // Force terminate process if it fails to exit in time
+    if (result == WAIT_TIMEOUT)
+        DIE_IF(w->id, !TerminateProcess(hProcess, 0));
+    DIE_IF(w->id, !CloseHandle(hProcess));
 #else
     waitpid(pid, NULL, 0);
 #endif
@@ -292,13 +296,22 @@ void Engine::engine_destroy(Worker *w)
     DIE_IF(w->id, fclose(out) < 0);
 }
 
-void Engine::engine_readln(const Worker *w, str_t *line)
+bool Engine::engine_readln(const Worker *w, str_t *line, bool fatal)
 {
-    if (!str_getline(line, in))
-        DIE("[%d] could not read from %s\n", w->id, name.buf);
+    if (!str_getline(line, in)) {
+        if (fatal)
+            DIE("[%d] could not read from %s\n", w->id, name.buf);
+        else {
+            // Instead of dying instantly, print an error message and make it a time loss
+            fprintf(stderr, "[%d] engine %s failed to respone\n", w->id, name.buf);
+            return false;
+        }
+    }
 
     if (w->log)
         DIE_IF(w->id, fprintf(w->log, "%s -> %s\n", name.buf, line->buf) < 0);
+
+    return true;
 }
 
 void Engine::engine_writeln(const Worker *w, const char *buf)
@@ -320,7 +333,7 @@ void Engine::engine_wait_for_ok(Worker *w)
     scope(str_destroy) str_t line = str_init();
 
     do {
-        engine_readln(w, &line);
+        engine_readln(w, &line, true);
 
         const char *tail = str_prefix(line.buf, "ERROR");
         if (tail != NULL) { // an ERROR
@@ -349,8 +362,9 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
     
     w->deadline_set(name.buf, turnTimeLimit + tolerance);
 
-    while ((turnTimeLeft + tolerance) >= 0 && !result) {
-        engine_readln(w, &line);
+    while (turnTimeLeft >= 0 && !result) {
+        if (!engine_readln(w, &line, false))
+            return false;
 
         const int64_t now = system_msec();
         info->time = now - start;
@@ -382,7 +396,8 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
         engine_writeln(w, "YXSTOP");
 
         do {
-            engine_readln(w, &line);
+            if (!engine_readln(w, &line, false))
+                return false;
             engine_process_message_ifneeded(line.buf);
         } while (!Position::is_valid_move_gomostr(line.buf));
     }
@@ -453,7 +468,7 @@ void Engine::engine_about(Worker *w, const char* fallbackName) {
     engine_writeln(w, "ABOUT");
     scope(str_destroy) str_t line = str_init();
 
-    engine_readln(w, &line);
+    engine_readln(w, &line, true);
 
     w->deadline_clear();
     
