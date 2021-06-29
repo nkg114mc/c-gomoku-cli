@@ -20,6 +20,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifdef __MINGW32__
+    #include <Windows.h>
+#endif
 #include "util.h"
 
 // SplitMix64 PRNG, based on http://xoroshiro.di.unimi.it/splitmix64.c
@@ -52,6 +55,19 @@ void system_sleep(int64_t msec)
 
 [[ noreturn ]] void die_errno(const int threadId, const char *fileName, int line)
 {
+#ifdef __MINGW32__
+    if (errno <= 0) {
+        int error = GetLastError();
+        char buf[256];
+        FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                    NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), 
+                    buf, (sizeof(buf) / sizeof(wchar_t)), NULL);
+        fprintf(stderr, "[%d] error in %s: (%d). %s (code %d)\n", 
+                threadId, fileName, line, buf, error);
+        exit(EXIT_FAILURE);
+    }
+#endif
+
     fprintf(stderr, "[%d] error in %s: (%d). %s\n", threadId, fileName, line, strerror(errno));
     exit(EXIT_FAILURE);
 }
