@@ -62,7 +62,7 @@ public:
     int game_play(Worker *w, const Options *o, Engine engines[2],
         const EngineOptions *eo[2], bool reverse);
 
-    void game_decode_state(str_t *result, str_t *reason, const char* restxt[3] = nullptr) const;
+    void game_decode_state(str_t *result, str_t *reason, const char* restxt[3]) const;
     void game_export_pgn(size_t gameIdx, int verbosity, str_t *out) const;
     void game_export_sgf(size_t gameIdx, str_t *out) const;
     void game_export_samples(FILE *out, bool bin, LZ4F_compressionContext_t lz4Ctx = nullptr) const;

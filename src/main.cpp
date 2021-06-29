@@ -214,8 +214,9 @@ static void *thread_start(void *arg)
         }
 
         // Write to stdout a one line summary of the game
+        const char* ResultTxt[3] = { "0-1", "1/2-1/2", "1-0" }; // Black-White
         scope(str_destroy) str_t result = str_init(), reason = str_init();
-        game.game_decode_state(&result, &reason);
+        game.game_decode_state(&result, &reason, ResultTxt);
 
         printf("[%d] Finished game %zu (%s vs %s): %s {%s}\n", w->id, idx + 1,
             engines[blackIdx].name.buf, engines[whiteIdx].name.buf, result.buf, reason.buf);

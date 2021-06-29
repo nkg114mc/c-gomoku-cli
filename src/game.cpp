@@ -370,12 +370,6 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
 
 void Game::game_decode_state(str_t *result, str_t *reason, const char* restxt[3]) const
 {
-    const char* DefaultResultTxt[3] = {
-        "1-0", "1/2-1/2", "0-1"
-    };
-    if (!restxt)
-        restxt = DefaultResultTxt;
-
     str_cpy_c(result, restxt[RESULT_DRAW]);
     str_clear(reason);
 
@@ -433,8 +427,9 @@ void Game::game_export_pgn(size_t gameIdx, int verbosity, str_t *out) const
     str_cat_fmt(out, "[White \"%S\"]\n", names[WHITE]);
 
     // Result in PGN format "1-0", "0-1", "1/2-1/2" (from white pov)
+    const char* ResultTxt[3] = { "1-0", "1/2-1/2", "0-1" };
     scope(str_destroy) str_t result = str_init(), reason = str_init();
-    game_decode_state(&result, &reason);
+    game_decode_state(&result, &reason, ResultTxt);
     str_cat_fmt(out, "[Result \"%S\"]\n", result);
     str_cat_fmt(out, "[Termination \"%S\"]\n", reason);
 
