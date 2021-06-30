@@ -361,23 +361,22 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
     }
     
     w->deadline_set(name.buf, turnTimeLimit + tolerance);
+    int64_t moveOverhead = std::min<int64_t>(tolerance / 2, 1000);
 
-    while (turnTimeLeft >= 0 && !result) {
+    while ((turnTimeLeft + moveOverhead) >= 0 && !result) {
         if (!engine_readln(w, &line, false))
-            return false;
+            goto Exit;
 
         const int64_t now = system_msec();
         info->time = now - start;
         *timeLeft = matchTimeLimit - now;
         turnTimeLeft = turnTimeLimit - now;
 
-        const char *tail = NULL;
-
         if (this->isDebug) {
             engine_process_message_ifneeded(line.buf);
         }
 
-        if ((tail = str_prefix(line.buf, "MESSAGE"))) {
+        if (const char *tail = str_prefix(line.buf, "MESSAGE")) {
             // record engine messages
             if (messages)
                 str_cat_fmt(messages, "%i) %S: %s\n", moveply, name, tail + 1);
@@ -397,13 +396,23 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
 
         do {
             if (!engine_readln(w, &line, false))
-                return false;
+                break;
 
             if (this->isDebug)
                 engine_process_message_ifneeded(line.buf);
+
+            if (const char *tail = str_prefix(line.buf, "MESSAGE")) {
+                // record engine messages
+                if (messages)
+                    str_cat_fmt(messages, "%i) %S: %s\n", moveply, name, tail + 1);
+
+                // parse and store thing infomation to info
+                engine_parse_thinking_messages(line.buf, info);
+            }
         } while (!Position::is_valid_move_gomostr(line.buf));
     }
 
+Exit:
     w->deadline_clear();
     return result;
 }
