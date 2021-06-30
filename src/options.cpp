@@ -346,6 +346,9 @@ void options_parse(int argc, const char **argv, Options *o, EngineOptions **eo)
 
             if (each.numThreads)
                 (*eo)[i].numThreads = each.numThreads;
+
+            if (each.tolerance)
+                (*eo)[i].tolerance = each.tolerance;
         }
     }
 
