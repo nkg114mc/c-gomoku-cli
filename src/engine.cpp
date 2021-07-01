@@ -274,18 +274,20 @@ void Engine::engine_destroy(Worker *w)
         return;
     }
 
-    // Order the engine to quit, and grant 1s deadline for obeying
-    w->deadline_set(name.buf, system_msec() + tolerance);
+    // Order the engine to quit, and grant (tolerance) deadline for obeying
+    w->deadline_set(name.buf, system_msec() + tolerance, "exit");
     engine_writeln(w, "END");
 
 #ifdef __MINGW32__
-    int result = WaitForSingleObject(hProcess, tolerance);
+    // On windows, wait for (tolerance-200) milliseconds, then force 
+    // terminate child process if it fails to exit in time
+    int result = WaitForSingleObject(hProcess, std::max<int64_t>(tolerance - 200, 0));
     DIE_IF(w->id, result == WAIT_FAILED);
-    // Force terminate process if it fails to exit in time
     if (result == WAIT_TIMEOUT)
         DIE_IF(w->id, !TerminateProcess(hProcess, 0));
     DIE_IF(w->id, !CloseHandle(hProcess));
 #else
+    // On unix/linux, wait until deadline
     waitpid(pid, NULL, 0);
 #endif
 
@@ -329,7 +331,7 @@ void Engine::engine_writeln(const Worker *w, const char *buf)
 
 void Engine::engine_wait_for_ok(Worker *w)
 {
-    w->deadline_set(name.buf, system_msec() + tolerance);
+    w->deadline_set(name.buf, system_msec() + tolerance, "start");
     scope(str_destroy) str_t line = str_init();
 
     do {
@@ -340,6 +342,7 @@ void Engine::engine_wait_for_ok(Worker *w)
             DIE("Engine[%s] output error:%s\n", this->name.buf, tail);
         }
     } while (strcmp(line.buf, "OK"));
+    
     w->deadline_clear();
 }
 
@@ -360,7 +363,7 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
         turnTimeLeft = min(*timeLeft, maxTurnTime);
     }
     
-    w->deadline_set(name.buf, turnTimeLimit + tolerance);
+    w->deadline_set(name.buf, turnTimeLimit + tolerance, "move");
     int64_t moveOverhead = std::min<int64_t>(tolerance / 2, 1000);
 
     while ((turnTimeLeft + moveOverhead) >= 0 && !result) {
@@ -475,7 +478,7 @@ static void parse_and_display_engine_about(str_t &line, str_t* engine_name) {
 
 // process engine ABOUT command
 void Engine::engine_about(Worker *w, const char* fallbackName) {
-    w->deadline_set(*name.buf ? name.buf : fallbackName, system_msec() + tolerance);
+    w->deadline_set(*name.buf ? name.buf : fallbackName, system_msec() + tolerance, "about");
     engine_writeln(w, "ABOUT");
     scope(str_destroy) str_t line = str_init();
 

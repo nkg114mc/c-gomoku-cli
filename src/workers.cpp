@@ -6,7 +6,7 @@
 
 std::vector<Worker> Workers;
 
-void Worker::deadline_set(const char *engineName, int64_t timeLimit)
+void Worker::deadline_set(const char *engineName, int64_t timeLimit, const char *description)
 {
     assert(timeLimit > 0);
 
@@ -14,12 +14,14 @@ void Worker::deadline_set(const char *engineName, int64_t timeLimit)
 
     deadline.set = true;
     str_cpy_c(&deadline.engineName, engineName);
+    str_cpy_c(&deadline.description, description);
     deadline.timeLimit = timeLimit;
 
     pthread_mutex_unlock(&deadline.mtx);
 
     if (log)
-        DIE_IF(id, fprintf(log, "deadline: %s must respond by %" PRId64 "\n", engineName, timeLimit) < 0);
+        DIE_IF(id, fprintf(log, "deadline: %s must respond to [%s] by %" PRId64 "\n", 
+            engineName, description, timeLimit) < 0);
 }
 
 void Worker::deadline_clear()
@@ -29,8 +31,8 @@ void Worker::deadline_clear()
     deadline.set = false;
 
     if (log)
-        DIE_IF(id, fprintf(log, "deadline: %s responded before %" PRId64 "\n",
-            deadline.engineName.buf, deadline.timeLimit) < 0);
+        DIE_IF(id, fprintf(log, "deadline: %s responded [%s] before %" PRId64 "\n",
+            deadline.engineName.buf, deadline.description.buf, deadline.timeLimit) < 0);
 
     pthread_mutex_unlock(&deadline.mtx);
 }
@@ -58,6 +60,7 @@ void Worker::worker_init(int i, const char *logName)
     id = i + 1;
     pthread_mutex_init(&deadline.mtx, NULL);
     deadline.engineName = str_init();
+    deadline.description = str_init();
 
     log = NULL;
     if (*logName) {
@@ -70,6 +73,7 @@ void Worker::worker_init(int i, const char *logName)
 void Worker::worker_destroy()
 {
     str_destroy(&deadline.engineName);
+    str_destroy(&deadline.description);
     pthread_mutex_destroy(&deadline.mtx);
 
     if (log) {

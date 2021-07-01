@@ -38,6 +38,7 @@ public:
         pthread_mutex_t mtx;
         int64_t timeLimit;
         str_t engineName;
+        str_t description;
         bool set;
         char pad[7];
     };
@@ -51,7 +52,7 @@ public:
     void worker_init(int id, const char *logName);
     void worker_destroy();
 
-    void deadline_set(const char *engineName, int64_t timeLimit);
+    void deadline_set(const char *engineName, int64_t timeLimit, const char *description);
     void deadline_clear();
     int64_t deadline_overdue();
 
