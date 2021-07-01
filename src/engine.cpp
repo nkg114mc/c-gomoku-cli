@@ -32,6 +32,7 @@
 #include <iostream>
 #include <sstream>
 #include <filesystem>
+#include <mutex>
 #include <assert.h>
 #include <limits.h>
 #include <pthread.h>
@@ -51,14 +52,6 @@ static void engine_spawn(const Worker *w, Engine *e,
     assert(argv[0]);
 
 #if defined(__MINGW32__)
-    SECURITY_ATTRIBUTES saAttr;
-    saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
-    saAttr.bInheritHandle = TRUE;
-    saAttr.lpSecurityDescriptor = NULL;
-
-    // Pipe handler: read=0, write=1
-    HANDLE p_stdin[2], p_stdout[2];
-
     // Setup the global job handle and job info, then bind parent process to it.
     // (This will only be called once)
     static HANDLE hJob = [w]() {
@@ -79,24 +72,16 @@ static void engine_spawn(const Worker *w, Engine *e,
         return hJob;
     }();
 
-    // Create a pipe for child process's STDOUT
-    DIE_IF(w->id, !CreatePipe(&p_stdout[0], &p_stdout[1], &saAttr, 0));
-    DIE_IF(w->id, !SetHandleInformation(p_stdout[0], HANDLE_FLAG_INHERIT, 0));
-
-    // Create a pipe for child process's STDIN
-    DIE_IF(w->id, !CreatePipe(&p_stdin[0], &p_stdin[1], &saAttr, 0));
-    DIE_IF(w->id, !SetHandleInformation(p_stdin[1], HANDLE_FLAG_INHERIT, 0));
-
-    // Create the child process
+    // Setup structs needed to create process
+    SECURITY_ATTRIBUTES saAttr;
+    saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+    saAttr.bInheritHandle = TRUE;
+    saAttr.lpSecurityDescriptor = NULL;
     PROCESS_INFORMATION piProcInfo; 
     STARTUPINFO siStartInfo;
     ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
     ZeroMemory(&siStartInfo, sizeof(STARTUPINFO));
     siStartInfo.cb = sizeof(STARTUPINFO); 
-    siStartInfo.hStdOutput = p_stdout[1];
-    siStartInfo.hStdInput = p_stdin[0];
-    if (readStdErr)
-        siStartInfo.hStdError = p_stdout[1];
     siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
 
     // Construct full commandline using run and argv
@@ -112,30 +97,53 @@ static void engine_spawn(const Worker *w, Engine *e,
         strcat_s(fullcmd, argv[i]);
     }
 
-    const int flag = CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS;
-    // FIXME: fullrun, fullcmd, cwd conversion to LPCWSTR
-    DIE_IF(w->id, !CreateProcess(
-        fullrun,        // application name
-        fullcmd,        // command line (non-const)
-        NULL,           // process security attributes
-        NULL,           // primary thread security attributes
-        TRUE,           // handles are inherited
-        flag,           // creation flags
-        NULL,           // use parent's environment
-        cwd,            // child process's current directory
-        &siStartInfo,   // STARTUPINFO pointer
-        &piProcInfo     // receives PROCESS_INFORMATION
-    ));
+    // Pipe handler: read=0, write=1
+    HANDLE p_stdin[2], p_stdout[2];
+
+    // Process and pipe creation should be sequential to avoid handle inheritance bug
+    static std::mutex mtx;
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+
+        // Create a pipe for child process's STDOUT
+        DIE_IF(w->id, !CreatePipe(&p_stdout[0], &p_stdout[1], &saAttr, 0));
+        DIE_IF(w->id, !SetHandleInformation(p_stdout[0], HANDLE_FLAG_INHERIT, 0));
+
+        // Create a pipe for child process's STDIN
+        DIE_IF(w->id, !CreatePipe(&p_stdin[0], &p_stdin[1], &saAttr, 0));
+        DIE_IF(w->id, !SetHandleInformation(p_stdin[1], HANDLE_FLAG_INHERIT, 0));
+        
+        // Create the child process
+        siStartInfo.hStdOutput = p_stdout[1];
+        siStartInfo.hStdInput = p_stdin[0];
+        if (readStdErr)
+            siStartInfo.hStdError = p_stdout[1];
+
+        const int flag = CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS;
+        // FIXME: fullrun, fullcmd, cwd conversion to LPCWSTR
+        DIE_IF(w->id, !CreateProcess(
+            fullrun,        // application name
+            fullcmd,        // command line (non-const)
+            NULL,           // process security attributes
+            NULL,           // primary thread security attributes
+            TRUE,           // handles are inherited
+            flag,           // creation flags
+            NULL,           // use parent's environment
+            cwd,            // child process's current directory
+            &siStartInfo,   // STARTUPINFO pointer
+            &piProcInfo     // receives PROCESS_INFORMATION
+        ));
+
+        // Close handles to the stdin and stdout pipes no longer needed
+        DIE_IF(w->id, !CloseHandle(p_stdin[0]));
+        DIE_IF(w->id, !CloseHandle(p_stdout[1]));
+    }
 
     // Keep the handle to the child process
     e->pid = piProcInfo.dwProcessId;
     e->hProcess = piProcInfo.hProcess;
     // Close the handle to the child's primary thread
     DIE_IF(w->id, !CloseHandle(piProcInfo.hThread));
-
-    // Close handles to the stdin and stdout pipes no longer needed
-    DIE_IF(w->id, !CloseHandle(p_stdin[0]));
-    DIE_IF(w->id, !CloseHandle(p_stdout[1]));
 
     // Reopen stdin and stdout pipes using C style FILE
     int stdin_fd = _open_osfhandle((intptr_t)p_stdin[1], _O_RDONLY | _O_TEXT);
