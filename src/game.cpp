@@ -593,8 +593,20 @@ void Game::game_export_samples_bin(FILE *out, LZ4F_compressionContext_t lz4Ctx) 
 
 void Game::game_export_samples(FILE *out, bool bin, LZ4F_compressionContext_t lz4Ctx) const
 {
+#ifdef __MINGW32__
+    _lock_file(out);
+#else
+    flockfile(out);
+#endif
+
     if (bin)
         game_export_samples_bin(out, lz4Ctx);
     else
         game_export_samples_csv(out);
+
+#ifdef __MINGW32__
+    _unlock_file(out);
+#else
+    funlockfile(out);
+#endif
 }

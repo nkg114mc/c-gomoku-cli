@@ -38,7 +38,6 @@ static SeqWriter sgfSeqWriter;
 static SeqWriter msgSeqWriter;
 static FILE *sampleFile;
 static LZ4F_compressionContext_t sampleFileLz4Ctx;
-static pthread_mutex_t sampleFileMtx;
 static JobQueue jq;
 
 static void main_destroy(void)
@@ -210,11 +209,8 @@ static void *thread_start(void *arg)
                 msgSeqWriter.seq_writer_push(idx, messages);
 
             // Write to Sample file
-            if (options.sp.fileName.len) {
-                pthread_mutex_lock(&sampleFileMtx); // lock sample file before writing
+            if (options.sp.fileName.len)
                 game.game_export_samples(sampleFile, options.sp.bin, sampleFileLz4Ctx);
-                pthread_mutex_unlock(&sampleFileMtx);
-            }
         }
 
         // Write to stdout a one line summary of the game
