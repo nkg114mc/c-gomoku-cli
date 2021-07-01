@@ -94,8 +94,7 @@ void Position::clear() {
 }
 
 Position::Position(int bSize) {
-    if (bSize > RealBoardSize)
-        DIE("board size too large\n");
+    assert(bSize > 0 && bSize <= RealBoardSize);
 	initBoard(bSize);
 }
 

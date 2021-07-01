@@ -51,7 +51,7 @@ public:
     void engine_init(Worker *w, const char *cmd, const char *name, bool debug, str_t *outmsg);
     void engine_destroy(Worker *w);
 
-    bool engine_readln(const Worker *w, str_t *line, bool fatal);
+    bool engine_readln(Worker *w, str_t *line);
     void engine_writeln(const Worker *w, const char *buf);
 
     void engine_sync(Worker *w);

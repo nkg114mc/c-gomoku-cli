@@ -290,7 +290,16 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         // current one if that's impossible).
         //Position resolved = resolve_pv(w, g, pv.buf);
 
-        if (!ok) {  // engine_bestmove() time out before parsing a bestmove
+        if (!ok) {  // engine crashed in engine_bestmove() 
+            std::printf("[%d] engine %s crashed at %d moves after opening\n", 
+                w->id, engines[ei].name.buf, ply);
+            state = STATE_CRASHED;
+            break;
+        }
+
+        if ((eo[ei]->timeoutTurn || eo[ei]->timeoutMatch || eo[ei]->increment) && timeLeft[ei] < 0) {
+            std::printf("[%d] engine %s timeout at %d moves after opening\n", 
+                w->id, engines[ei].name.buf, ply);
             state = STATE_TIME_LOSS;
             break;
         }
@@ -298,18 +307,14 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         played = pos[ply].gomostr_to_move(best.buf);
 
         if (!pos[ply].is_legal_move(played)) {
-            std::cout << "Illegal move: " << best.buf << std::endl;
+            std::printf("[%d] engine %s output illegal move at %d moves after opening: %s\n",
+                w->id, engines[ei].name.buf, ply, best.buf);
             state = STATE_ILLEGAL_MOVE;
             break;
         }
 
         if (game_rule == RENJU && pos[ply].is_forbidden_move(played)) {
             state = STATE_FORBIDDEN_MOVE;
-            break;
-        }
-
-        if ((eo[ei]->timeoutTurn || eo[ei]->timeoutMatch || eo[ei]->increment) && timeLeft[ei] < 0) {
-            state = STATE_TIME_LOSS;
             break;
         }
 
@@ -356,8 +361,8 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         : RESULT_DRAW;
 
     // Fill results in samples
-    if (state == STATE_TIME_LOSS || state == STATE_ILLEGAL_MOVE) {
-        vec_clear(samples); // discard samples in a time loss/illegal move game
+    if (state == STATE_TIME_LOSS || state == STATE_CRASHED || state == STATE_ILLEGAL_MOVE) {
+        vec_clear(samples); // discard samples in a time loss/crash/illegal move game
     } else {
         for (size_t i = 0; i < vec_size(samples); i++)
             samples[i].result = samples[i].pos.get_turn() == WHITE ? wpov : 2 - wpov;
@@ -404,6 +409,10 @@ void Game::game_decode_state(str_t *result, str_t *reason, const char* restxt[3]
         str_cpy_c(result, pos[ply].get_turn() == BLACK ? restxt[RESULT_LOSS] : restxt[RESULT_WIN]);
         str_cpy_c(reason, pos[ply].get_turn() == BLACK ? "White win by time forfeit" : 
                                                          "Black win by time forfeit");
+    } else if (state == STATE_CRASHED) {
+        str_cpy_c(result, pos[ply].get_turn() == BLACK ? restxt[RESULT_LOSS] : restxt[RESULT_WIN]);
+        str_cpy_c(reason, pos[ply].get_turn() == BLACK ? "White win by opponent crash" : 
+                                                         "Black win by opponent crash");
     } else
         assert(false);
 }

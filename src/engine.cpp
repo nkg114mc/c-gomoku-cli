@@ -114,7 +114,7 @@ static void engine_spawn(const Worker *w, Engine *e,
 
     const int flag = CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS;
     // FIXME: fullrun, fullcmd, cwd conversion to LPCWSTR
-    if (!CreateProcess(
+    DIE_IF(w->id, !CreateProcess(
         fullrun,        // application name
         fullcmd,        // command line (non-const)
         NULL,           // process security attributes
@@ -125,8 +125,7 @@ static void engine_spawn(const Worker *w, Engine *e,
         cwd,            // child process's current directory
         &siStartInfo,   // STARTUPINFO pointer
         &piProcInfo     // receives PROCESS_INFORMATION
-    ))
-        DIE("Fail to execute engine %s\n", fullrun);
+    ));
 
     // Keep the handle to the child process
     e->pid = piProcInfo.dwProcessId;
@@ -294,20 +293,22 @@ void Engine::engine_destroy(Worker *w)
     w->deadline_clear();
 
     str_destroy(&name);
-    DIE_IF(w->id, fclose(in) < 0);
-    DIE_IF(w->id, fclose(out) < 0);
+    if (in)  DIE_IF(w->id, fclose(in) < 0);
+    if (out) DIE_IF(w->id, fclose(out) < 0);
 }
 
-bool Engine::engine_readln(const Worker *w, str_t *line, bool fatal)
+bool Engine::engine_readln(Worker *w, str_t *line)
 {
+    if (!in) // Check if engine has crashed
+        return false;
+
     if (!str_getline(line, in)) {
-        if (fatal)
-            DIE("[%d] could not read from %s\n", w->id, name.buf);
-        else {
-            // Instead of dying instantly, print an error message and make it a time loss
-            fprintf(stderr, "[%d] engine %s failed to respone\n", w->id, name.buf);
-            return false;
-        }
+        // Pipe returning EOF means engine crashed
+        // Instead of dying instantly, close pipe to flag engine died and return false
+        DIE_IF(w->id, fclose(in) < 0);
+        DIE_IF(w->id, fclose(out) < 0);
+        in = out = nullptr;
+        return false;
     }
 
     if (w->log)
@@ -318,9 +319,19 @@ bool Engine::engine_readln(const Worker *w, str_t *line, bool fatal)
 
 void Engine::engine_writeln(const Worker *w, const char *buf)
 {
+    if (!out) // Check if engine has crashed
+        return;
+
     DIE_IF(w->id, fputs(buf, out) < 0);
     DIE_IF(w->id, fputc('\n', out) < 0);
-    DIE_IF(w->id, fflush(out) < 0);
+
+    // We take fflush error as engine crashed signal
+    if (fflush(out) < 0) {
+        // Instead of dying instantly, close pipe to flag engine died
+        DIE_IF(w->id, fclose(in) < 0);
+        DIE_IF(w->id, fclose(out) < 0);
+        in = out = nullptr;
+    }
 
     if (w->log) {
         DIE_IF(w->id, fprintf(w->log, "%s <- %s\n", name.buf, buf) < 0);
@@ -328,21 +339,19 @@ void Engine::engine_writeln(const Worker *w, const char *buf)
     }
 }
 
-
 void Engine::engine_wait_for_ok(Worker *w)
 {
     w->deadline_set(name.buf, system_msec() + tolerance, "start");
     scope(str_destroy) str_t line = str_init();
 
     do {
-        engine_readln(w, &line, true);
+        if (!engine_readln(w, &line))
+            DIE("[%d] engine %s exited before answering START\n", w->id, name.buf);
 
-        const char *tail = str_prefix(line.buf, "ERROR");
-        if (tail != NULL) { // an ERROR
-            DIE("Engine[%s] output error:%s\n", this->name.buf, tail);
-        }
+        if (const char *tail = str_prefix(line.buf, "ERROR")) // an ERROR
+            DIE("[%d] engine %s output error:%s\n", w->id, name.buf, tail);
     } while (strcmp(line.buf, "OK"));
-    
+
     w->deadline_clear();
 }
 
@@ -367,7 +376,7 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
     int64_t moveOverhead = std::min<int64_t>(tolerance / 2, 1000);
 
     while ((turnTimeLeft + moveOverhead) >= 0 && !result) {
-        if (!engine_readln(w, &line, false))
+        if (!engine_readln(w, &line))
             goto Exit;
 
         const int64_t now = system_msec();
@@ -397,9 +406,12 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
     if (!result) {
         engine_writeln(w, "YXSTOP");
 
+        // For turn timeout, explicitly mark time left as negetive
+        *timeLeft = std::min(*timeLeft, INT64_MIN);
+
         do {
-            if (!engine_readln(w, &line, false))
-                break;
+            if (!engine_readln(w, &line))
+                goto Exit;
 
             if (this->isDebug)
                 engine_process_message_ifneeded(line.buf);
@@ -412,7 +424,7 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
                 // parse and store thing infomation to info
                 engine_parse_thinking_messages(line.buf, info);
             }
-        } while (!Position::is_valid_move_gomostr(line.buf));
+        } while (result = Position::is_valid_move_gomostr(line.buf), !result);
     }
 
 Exit:
@@ -420,7 +432,7 @@ Exit:
     return result;
 }
 
-static void parse_and_display_engine_about(str_t &line, str_t* engine_name) {
+static void parse_and_display_engine_about(Worker *w, str_t &line, str_t* engine_name) {
     int flag = 0;
     std::vector<std::string> tokens;
     std::stringstream ss;
@@ -473,7 +485,9 @@ static void parse_and_display_engine_about(str_t &line, str_t* engine_name) {
             }
         }
     }
-    std::cout << "Load engine: " << name << " (version " << version << ") by " << author << ", " << country << std::endl;
+
+    std::printf("[%d] Load engine: %s (version %s) by %s, %s\n", w->id, 
+        name.c_str(), version.c_str(), author.c_str(), country.c_str());
 }
 
 // process engine ABOUT command
@@ -482,12 +496,13 @@ void Engine::engine_about(Worker *w, const char* fallbackName) {
     engine_writeln(w, "ABOUT");
     scope(str_destroy) str_t line = str_init();
 
-    engine_readln(w, &line, true);
+    if (!engine_readln(w, &line))
+        DIE("[%d] engine %s exited before answering ABOUT\n", w->id, name.buf);
 
     w->deadline_clear();
     
     // parse about infos
-    parse_and_display_engine_about(line, &name);
+    parse_and_display_engine_about(w, line, &name);
 
     // If we can not get a name from engname or about, use fallback name instead
     if (!*name.buf)
@@ -502,25 +517,25 @@ void Engine::engine_process_message_ifneeded(const char *line)
 
     tail = str_prefix(line, "MESSAGE");
     if (tail != NULL) { // a MESSAGE
-        printf("Engine[%s] output message:%s\n", this->name.buf, tail);
+        printf("engine %s output message:%s\n", this->name.buf, tail);
         return;
     }
 
     tail = str_prefix(line, "UNKNOWN");
     if (tail != NULL) { // a UNKNOWN
-        printf("Engine[%s] output unknown:%s\n", this->name.buf, tail);
+        printf("engine %s output unknown:%s\n", this->name.buf, tail);
         return;
     }
 
     tail = str_prefix(line, "DEBUG");
     if (tail != NULL) { // a DEBUG
-        printf("Engine[%s] output debug:%s\n", this->name.buf, tail);
+        printf("engine %s output debug:%s\n", this->name.buf, tail);
         return;
     }
 
     tail = str_prefix(line, "ERROR");
     if (tail != NULL) { // an ERROR
-        printf("Engine[%s] output error:%s\n", this->name.buf, tail);
+        printf("engine %s output error:%s\n", this->name.buf, tail);
         return;
     }
 }

@@ -27,6 +27,7 @@ enum {
     // All possible ways to lose
     STATE_FIVE_CONNECT,  // lost by being checkmated
     STATE_TIME_LOSS,  // lost on time
+    STATE_CRASHED,  // lost by crashing in the middle of a game
     STATE_ILLEGAL_MOVE,  // lost by playing an illegal move
     STATE_FORBIDDEN_MOVE,  // lost by playing on a forbidden position
     STATE_RESIGN,  // resigned on behalf of the engine
