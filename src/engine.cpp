@@ -90,7 +90,9 @@ static void engine_spawn(const Worker *w, Engine *e,
     strcat_s(fullrun, run + 1); // we need an path relative to the cli
 
     // Use an absolute path for engine argv[0]
-    strcpy_s(fullcmd, std::filesystem::absolute(fullrun).string().c_str()); 
+    strcpy_s(fullcmd, "\""); // path is quoted to deal with directory name with spaces
+    strcat_s(fullcmd, std::filesystem::absolute(fullrun).string().c_str()); 
+    strcat_s(fullcmd, "\"");
     for (size_t i = 1; argv[i]; i++) {  // argv[0] == run
         strcat_s(fullcmd, " ");
         strcat_s(fullcmd, argv[i]);
@@ -115,8 +117,12 @@ static void engine_spawn(const Worker *w, Engine *e,
         // Create the child process
         siStartInfo.hStdOutput = p_stdout[1];
         siStartInfo.hStdInput = p_stdin[0];
-        if (readStdErr)
-            siStartInfo.hStdError = p_stdout[1];
+        if (readStdErr) {
+            HANDLE p_stderr;
+            DIE_IF(w->id, !DuplicateHandle(GetCurrentProcess(), p_stdout[1],
+                GetCurrentProcess(), &p_stderr, 0, TRUE, DUPLICATE_SAME_ACCESS));
+            siStartInfo.hStdError = p_stderr;
+        }
 
         const int flag = CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS;
         // FIXME: fullrun, fullcmd, cwd conversion to LPCWSTR
