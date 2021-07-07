@@ -366,8 +366,8 @@ move_t Position::gomostr_to_move(char *move_str) const {
 	std::string mvstr = std::string(move_str);	
     
     int commaCount = 0;
-    int commaIdx = 0;
-    for (int i = 0; i < mvstr.length(); i++) {
+    size_t commaIdx = 0;
+    for (size_t i = 0; i < mvstr.length(); i++) {
         if (mvstr[i] == ',') {
             commaIdx = i;
             commaCount++;
@@ -376,9 +376,8 @@ move_t Position::gomostr_to_move(char *move_str) const {
 
     assert(commaCount == 1);
 
-    int firstLen = commaIdx;
-    std::string xstr = mvstr.substr(0, firstLen);
-    int secondLen = mvstr.length() - commaIdx - 1;
+    std::string xstr = mvstr.substr(0, commaIdx);
+    size_t secondLen = mvstr.length() - commaIdx - 1;
     std::string ystr = mvstr.substr(commaIdx + 1, secondLen);
 
     int x = std::stoi(xstr);
@@ -391,20 +390,16 @@ move_t Position::gomostr_to_move(char *move_str) const {
 
 static bool isNumber(std::string &str) {
     char* p;
-    long converted = strtol(str.c_str(), &p, 10);
-    if (*p) {
-       return false;
-    }
-    return true;
+    strtol(str.c_str(), &p, 10);
+    return !*p;
 }
 
 bool Position::is_valid_move_gomostr(char *move_str) {
-    int i;
     std::string mvstr = std::string(move_str);
 
     int commaCount = 0;
-    int commaIdx = 0;
-    for (i = 0; i < mvstr.length(); i++) {
+    size_t commaIdx = 0;
+    for (size_t i = 0; i < mvstr.length(); i++) {
         if (mvstr[i] == ',') {
             commaIdx = i;
             commaCount++;
@@ -415,9 +410,8 @@ bool Position::is_valid_move_gomostr(char *move_str) {
         return false; // no comma, or more than one comma?
     }
 
-    int firstLen = commaIdx;
-    std::string xstr = mvstr.substr(0, firstLen);
-    int secondLen = mvstr.length() - commaIdx - 1;
+    std::string xstr = mvstr.substr(0, commaIdx);
+    size_t secondLen = mvstr.length() - commaIdx - 1;
     std::string ystr = mvstr.substr(commaIdx + 1, secondLen);
     if ((!isNumber(xstr)) || (!isNumber(ystr))) {
         return false; // any of two coords are not number
@@ -468,7 +462,7 @@ bool Position::apply_opening(str_t &opening_str, OpeningType type) {
     }
 
     clear(); // set board to init
-    for (int i = 0; i < openning_pos.size(); i++) {
+    for (size_t i = 0; i < openning_pos.size(); i++) {
         move_t mv = buildMovePos(openning_pos[i], this->get_turn());
         move(mv); // make opening move
     }
@@ -493,8 +487,6 @@ bool Position::parse_opening_offset_linestr(std::vector<Pos> &opening_pos, str_t
     }
 
     int cnt = 0;
-    int maxOffset = 32 / 2;
-
     int ofst = -9999;
     int buff[3];
     while (ss >> ofst) {

@@ -26,8 +26,7 @@ struct Result {
 };
 
 // Job: instruction to play a single game
-class Job {
-public:
+struct Job {
     int ei[2], pair;  // ei[0] plays ei[1]
     int round, game;  // round and game number (start at 0)
     bool reverse;  // if true, e1 plays second

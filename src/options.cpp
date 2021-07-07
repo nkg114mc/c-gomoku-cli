@@ -403,13 +403,13 @@ void options_print(Options *o, EngineOptions **eo) {
     std::cout << "debug = " << o->debug << std::endl;
     std::cout << std::endl;
 
-    int engineCnt = vec_size(*eo);
+    size_t engineCnt = vec_size(*eo);
     std::cout << "Engine number = " << engineCnt << std::endl;
-    for (int i = 0 ; i < engineCnt; i++) {
+    for (size_t ei = 0 ; ei < engineCnt; ei++) {
         EngineOptions *e1;
-        e1 = &((*eo)[i]);
+        e1 = &((*eo)[ei]);
         std::cout << "---------------------------" << std::endl;
-        std::cout << "Engine " << i << " Options:" << std::endl;
+        std::cout << "Engine " << ei << " Options:" << std::endl;
         std::cout << "name = " << e1->name.buf << std::endl;
         std::cout << "cmd = " << e1->cmd.buf << std::endl;
         std::cout << "nodes = " << e1->nodes << std::endl;

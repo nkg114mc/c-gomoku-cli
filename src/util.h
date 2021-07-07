@@ -43,10 +43,10 @@ void system_sleep(int64_t msec);
 
 [[ noreturn ]] void die_errno(const int threadId, const char *fileName, int line);
 
-#define DIE_IF(id, v) ({ \
+#define DIE_IF(id, v) { \
     if (v) \
         die_errno(id, __FILE__, __LINE__); \
-})
+}
 
 #ifdef __linux__
     #define FOPEN_READ_MODE "re"
