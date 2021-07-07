@@ -40,14 +40,12 @@ public:
         str_t engineName;
         str_t description;
         bool set;
-        char pad[7];
     };
 
     Deadline_t deadline;
     FILE *log;
     uint64_t seed;  // seed for prng()
     int id;  // starts at 1 (0 is for main thread)
-    char pad[4];
 
     void worker_init(int id, const char *logName);
     void worker_destroy();

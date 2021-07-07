@@ -25,7 +25,6 @@ struct SampleParams {
     str_t fileName;
     double freq;
     bool bin, compress;
-    char pad[2];
 };
 
 struct Options {
@@ -41,7 +40,6 @@ struct Options {
     bool log, random, repeat, transform;
     bool sprt, gauntlet, useTURN, saveLoseOnly;
     bool debug;
-    char pad[3];
     OpeningType openingType;
     SampleParams sp;
 };

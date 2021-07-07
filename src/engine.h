@@ -46,7 +46,6 @@ public:
     str_t *messages;
     int64_t tolerance;
     bool isDebug;
-    char pad[3];
 
     void engine_init(Worker *w, const char *cmd, const char *name, bool debug, str_t *outmsg);
     void engine_destroy(Worker *w);

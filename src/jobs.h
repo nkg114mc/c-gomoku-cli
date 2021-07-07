@@ -23,7 +23,6 @@
 struct Result {
     int ei[2];
     int count[3];
-    char pad[4];
 };
 
 // Job: instruction to play a single game
@@ -32,7 +31,6 @@ public:
     int ei[2], pair;  // ei[0] plays ei[1]
     int round, game;  // round and game number (start at 0)
     bool reverse;  // if true, e1 plays second
-    char pad[3];
 };
 
 // Job Queue: consumed by workers to play tournament (thread safe)
