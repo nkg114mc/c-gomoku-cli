@@ -19,9 +19,9 @@
 #include <cinttypes>
 #include <cstdbool>
 #include <cstdio>
+#include <functional>
 #include <vector>
-
-#include "str.h"
+#include <string>
 
 // Game results
 enum {
@@ -37,9 +37,11 @@ public:
     struct Deadline_t {
         pthread_mutex_t mtx;
         int64_t timeLimit;
-        str_t engineName;
-        str_t description;
+        std::string engineName;
+        std::string description;
+        std::function<void()> callback;
         bool set;
+        bool called;
     };
 
     Deadline_t deadline;
@@ -47,20 +49,15 @@ public:
     uint64_t seed;  // seed for prng()
     int id;  // starts at 1 (0 is for main thread)
 
-    void worker_init(int id, const char *logName);
-    void worker_destroy();
+    Worker(int id, const char *logName);
+    ~Worker();
 
-    void deadline_set(const char *engineName, int64_t timeLimit, const char *description);
+    void deadline_set(const char *engineName, int64_t timeLimit, const char *description,
+        std::function<void()> callback = nullptr);
     void deadline_clear();
+    void deadline_callback_once();
     int64_t deadline_overdue();
-
-    void workers_busy_add(int n);
-    int workers_busy_count(void);
-
 };
 
-//extern Worker *Workers;
 extern std::vector<Worker> Workers;
-
-
 

@@ -6,16 +6,19 @@
 
 std::vector<Worker> Workers;
 
-void Worker::deadline_set(const char *engineName, int64_t timeLimit, const char *description)
+void Worker::deadline_set(const char *engineName, int64_t timeLimit, 
+    const char *description, std::function<void()> callback)
 {
     assert(timeLimit > 0);
 
     pthread_mutex_lock(&deadline.mtx);
 
     deadline.set = true;
-    str_cpy_c(&deadline.engineName, engineName);
-    str_cpy_c(&deadline.description, description);
+    deadline.called = false;
+    deadline.engineName = engineName;
+    deadline.description = description;
     deadline.timeLimit = timeLimit;
+    deadline.callback = callback;
 
     pthread_mutex_unlock(&deadline.mtx);
 
@@ -32,7 +35,20 @@ void Worker::deadline_clear()
 
     if (log)
         DIE_IF(id, fprintf(log, "deadline: %s responded [%s] before %" PRId64 "\n",
-            deadline.engineName.buf, deadline.description.buf, deadline.timeLimit) < 0);
+            deadline.engineName.c_str(), deadline.description.c_str(), deadline.timeLimit) < 0);
+
+    pthread_mutex_unlock(&deadline.mtx);
+}
+
+void Worker::deadline_callback_once()
+{
+    pthread_mutex_lock(&deadline.mtx);
+
+    if (deadline.set && !deadline.called) {
+        deadline.called = true;
+        if (deadline.callback)
+            deadline.callback();
+    }
 
     pthread_mutex_unlock(&deadline.mtx);
 }
@@ -54,28 +70,22 @@ int64_t Worker::deadline_overdue()
         return 0;
 }
 
-void Worker::worker_init(int i, const char *logName)
+Worker::Worker(int i, const char *logName)
 {
     seed = (uint64_t)i;
     id = i + 1;
     pthread_mutex_init(&deadline.mtx, NULL);
-    deadline.engineName = str_init();
-    deadline.description = str_init();
 
     log = NULL;
     if (*logName) {
         log = fopen(logName, FOPEN_WRITE_MODE);
         DIE_IF(0, !log);
     }
-
 }
 
-void Worker::worker_destroy()
+Worker::~Worker()
 {
-    str_destroy(&deadline.engineName);
-    str_destroy(&deadline.description);
     pthread_mutex_destroy(&deadline.mtx);
-
     if (log) {
         DIE_IF(0, fclose(log) < 0);
         log = NULL;

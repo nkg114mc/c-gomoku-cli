@@ -42,9 +42,6 @@ static JobQueue jq;
 
 static void main_destroy(void)
 {
-    for (int i = 0; i < Workers.size(); i++) {
-        Workers[i].worker_destroy();
-    }
     Workers.clear();
 
     if (options.sp.fileName.len) {
@@ -119,9 +116,7 @@ static void main_init(int argc, const char **argv)
             str_cat_fmt(&logName, "c-gomoku-cli.%i.log", i + 1);
         }
 
-        Worker wker;
-        wker.worker_init(i, logName.buf);
-        Workers.push_back(wker);
+        Workers.push_back(Worker {i, logName.buf});
     }
 }
 
@@ -271,9 +266,12 @@ int main(int argc, const char **argv)
         // are likely to face a completely unresponsive engine, where any attempt at I/O will block
         // the master thread, on top of the already blocked worker. Hence, we must DIE().
         for (int i = 0; i < options.concurrency; i++) {
-            if (Workers[i].deadline_overdue() > 1000) {
+            int64_t overdue = Workers[i].deadline_overdue();
+            if (overdue > 0) {
+                Workers[i].deadline_callback_once();
+            } else if (overdue > 1000) {
                 DIE("[%d] engine %s is unresponsive to [%s]\n", Workers[i].id,
-                    Workers[i].deadline.engineName.buf, Workers[i].deadline.description.buf);
+                    Workers[i].deadline.engineName.c_str(), Workers[i].deadline.description.c_str());
             }
         }
     } while (!jq.job_queue_done());
