@@ -21,30 +21,30 @@
 
 // SeqStr
 
-void SeqStr::seq_str_init(size_t idx, str_t str)
+void SeqStr::init(size_t idx, str_t str)
 {
     this->idx = idx;
     this->str = str_init_from(str);
 }
 
-void SeqStr::seq_str_destroy()
+void SeqStr::destroy()
 {
     str_destroy(&str);
 }
 
 // SeqWriter
 
-void SeqWriter::seq_writer_init(const char *fileName, const char *mode)
+SeqWriter::SeqWriter(const char *fileName, const char *mode) : idxNext(0)
 {
     out = fopen(fileName, mode);
     buf = vec_init(SeqStr);
     pthread_mutex_init(&mtx, NULL);
 }
 
-void SeqWriter::seq_writer_destroy()
+SeqWriter::~SeqWriter()
 {
     pthread_mutex_destroy(&this->mtx);
-    //vec_destroy_rec(this->buf, seq_str_destroy);
+    //vec_destroy_rec(this->buf, destroy);
 
     // write out all records even if not sequential
     write_to_i(vec_size(buf));
@@ -52,14 +52,14 @@ void SeqWriter::seq_writer_destroy()
     fclose(this->out);
 }
 
-void SeqWriter::seq_writer_push(size_t idx, str_t str)
+void SeqWriter::push(size_t idx, str_t str)
 {
     pthread_mutex_lock(&mtx);
 
     // Append to buf[n]
     const size_t n = vec_size(buf);
     SeqStr sstr;
-    sstr.seq_str_init(idx, str);
+    sstr.init(idx, str);
     vec_push(buf, sstr, SeqStr);
 
     // insert in correct position
@@ -89,7 +89,7 @@ void SeqWriter::write_to_i(size_t i) {
     // Write buf[0..i-1] to file, and destroy elements
     for (size_t j = 0; j < i; j++) {
         fputs(buf[j].str.buf, out);
-        buf[j].seq_str_destroy();
+        buf[j].destroy();
     }
     fflush(out);
 

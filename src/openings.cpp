@@ -21,13 +21,12 @@
 #include "util.h"
 #include "vec.h"
 
-void Openings::openings_init(const char *fileName, bool random, uint64_t srand, int threadId)
+Openings::Openings(const char *fileName, bool random, uint64_t srand) : file(nullptr)
 {
-    //index = vec_init(size_t);
     index = (long*) vec_init(size_t);
 
     if (*fileName) {
-        DIE_IF(threadId, !(file = fopen(fileName, FOPEN_READ_MODE)));
+        DIE_IF(0, !(file = fopen(fileName, FOPEN_READ_MODE)));
     }
 
     if (file) {
@@ -61,21 +60,21 @@ void Openings::openings_init(const char *fileName, bool random, uint64_t srand, 
     pthread_mutex_init(&mtx, NULL);
 }
 
-void Openings::openings_destroy(int threadId)
+Openings::~Openings()
 {
     if (file)
-        DIE_IF(threadId, fclose(file) < 0);
+        DIE_IF(0, fclose(file) < 0);
 
     pthread_mutex_destroy(&mtx);
     vec_destroy(index);
 }
 
-void Openings::openings_next(str_t *fen, size_t *round, size_t idx, int threadId)
+// Returns current round
+size_t Openings::next(str_t *fen, size_t idx, int threadId)
 {
     if (!file) {
         str_cpy_c(fen, "");
-        *round = 0;
-        return;
+        return 0;
     }
 
     // Read 'fen' from file
@@ -87,47 +86,5 @@ void Openings::openings_next(str_t *fen, size_t *round, size_t idx, int threadId
     pthread_mutex_unlock(&mtx);
 
     str_cpy(fen, line);
-    *round = idx / vec_size(index);
-
-    //assert(openings_validate_opening_str(*fen));
+    return idx / vec_size(index);
 }
-
-/*
-bool Openings::openings_validate_opening_str(str_t &line) {
-
-    std::stringstream ss;
-    for (int i = 0; i < line.len; i++) {
-        char ch = line.buf[i];
-        if ((ch <= '9' && ch >= '0') || ch == '-') {
-            ss << ch;
-        } else {
-            ss << ' '; 
-        }
-    }
-
-    int cnt = 0;
-    int maxOffset = 32 / 2;
-
-    int ofst = -9999;
-    while (ss >> ofst) {
-        if (ofst != -9999) {
-            if (ofst >= -16 && ofst <= 15) {
-                cnt++;
-            } else {
-                printf("Coord offset is too large: %d!\n", ofst);
-                return false;
-            }
-        } else {
-            printf("Invalid coord offset: %d!\n", ofst);
-            return false;
-        }
-        ofst = -9999;
-    }
-
-    if (cnt % 2 != 0) {
-        printf("Coord offsets are not paired (total %d offsets)!\n", cnt);
-        return false;
-    }
-    return true;
-}
-*/

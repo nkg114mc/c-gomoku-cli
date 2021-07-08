@@ -20,12 +20,11 @@
 #include <cstdio>
 #include "str.h"
 
-class SeqStr {
-public:
+struct SeqStr {
     size_t idx;
     str_t str;
-    void seq_str_init(size_t idx, str_t str);
-    void seq_str_destroy();
+    void init(size_t idx, str_t str);
+    void destroy();
 };
 
 class SeqWriter {
@@ -35,10 +34,10 @@ public:
     FILE *out;
     size_t idxNext;
 
-    void seq_writer_init(const char *fileName, const char *mode);
+    SeqWriter(const char *fileName, const char *mode);
+    ~SeqWriter();
 
-    void seq_writer_destroy();
-    void seq_writer_push(size_t idx, str_t str);
+    void push(size_t idx, str_t str);
 
 private:
     void write_to_i(size_t i);

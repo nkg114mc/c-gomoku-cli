@@ -32,7 +32,7 @@ static void job_queue_init_pair(int games, int e1, int e2, int pair, int *added,
     }
 }
 
-void JobQueue::job_queue_init(int engines, int rounds, int games, bool gauntlet)
+JobQueue::JobQueue(int engines, int rounds, int games, bool gauntlet) : idx(0), completed(0)
 {
     assert(engines >= 2 && rounds >= 1 && games >= 1);
 
@@ -78,7 +78,7 @@ void JobQueue::job_queue_init(int engines, int rounds, int games, bool gauntlet)
     }
 }
 
-void JobQueue::job_queue_destroy()
+JobQueue::~JobQueue()
 {
     vec_destroy(results);
     vec_destroy(jobs);
@@ -86,7 +86,7 @@ void JobQueue::job_queue_destroy()
     pthread_mutex_destroy(&mtx);
 }
 
-bool JobQueue::job_queue_pop(Job *j, size_t *idx_in, size_t *count)
+bool JobQueue::pop(Job *j, size_t *idx_in, size_t *count)
 {
     pthread_mutex_lock(&mtx);
     const bool ok = this->idx < vec_size(this->jobs);
@@ -102,7 +102,7 @@ bool JobQueue::job_queue_pop(Job *j, size_t *idx_in, size_t *count)
 }
 
 // Add game outcome, and return updated totals
-void JobQueue::job_queue_add_result(int pair, int outcome, int count[3])
+void JobQueue::add_result(int pair, int outcome, int count[3])
 {
     pthread_mutex_lock(&mtx);
     results[pair].count[outcome]++;
@@ -114,7 +114,7 @@ void JobQueue::job_queue_add_result(int pair, int outcome, int count[3])
     pthread_mutex_unlock(&mtx);
 }
 
-bool JobQueue::job_queue_done()
+bool JobQueue::done()
 {
     pthread_mutex_lock(&mtx);
     assert(idx <= vec_size(jobs));
@@ -123,14 +123,14 @@ bool JobQueue::job_queue_done()
     return done;
 }
 
-void JobQueue::job_queue_stop()
+void JobQueue::stop()
 {
     pthread_mutex_lock(&mtx);
     idx = vec_size(jobs);
     pthread_mutex_unlock(&mtx);
 }
 
-void JobQueue::job_queue_set_name(int ei, const char *name)
+void JobQueue::set_name(int ei, const char *name)
 {
     pthread_mutex_lock(&mtx);
 
@@ -140,7 +140,7 @@ void JobQueue::job_queue_set_name(int ei, const char *name)
     pthread_mutex_unlock(&mtx);
 }
 
-void JobQueue::job_queue_print_results(size_t frequency)
+void JobQueue::print_results(size_t frequency)
 {
     pthread_mutex_lock(&mtx);
 

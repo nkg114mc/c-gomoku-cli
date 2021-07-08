@@ -49,11 +49,8 @@ static int game_apply_rules(const Game *g, move_t lastmove)
     return STATE_NONE;
 }
 
-void Game::game_init(int rd, int gm)
+Game::Game(int rd, int gm) : round(rd), game(gm), ply(), state(), board_size(), game_rule()
 {
-    this->round = rd;
-    this->game = gm;
-
     this->names[BLACK] = str_init();
     this->names[WHITE] = str_init();
 
@@ -62,7 +59,16 @@ void Game::game_init(int rd, int gm)
     this->samples = vec_init(Sample);
 }
 
-bool Game::game_load_fen(str_t *fen, int *color, const Options *o, size_t curRound)
+Game::~Game()
+{
+    vec_destroy(samples);
+    vec_destroy(info);
+    vec_destroy(pos);
+
+    str_destroy_n(&names[BLACK], &names[WHITE]);
+}
+
+bool Game::load_fen(str_t *fen, int *color, const Options *o, size_t curRound)
 {
     Position p0(o->boardSize);
     vec_push(pos, p0, Position);
@@ -79,15 +85,6 @@ bool Game::game_load_fen(str_t *fen, int *color, const Options *o, size_t curRou
     }
 
     return true;
-}
-
-void Game::game_destroy()
-{
-    vec_destroy(samples);
-    vec_destroy(info);
-    vec_destroy(pos);
-
-    str_destroy_n(&names[BLACK], &names[WHITE]);
 }
 
 void Game::gomocup_turn_info_command(const EngineOptions *eo, 
@@ -196,7 +193,7 @@ void Game::compute_time_left(const EngineOptions *eo, int64_t *timeLeft) {
     }
 }
 
-int Game::game_play(Worker *w, const Options *o, Engine engines[2],
+int Game::play(Worker *w, const Options *o, Engine engines[2],
     const EngineOptions *eo[2], bool reverse)
 // Play a game:
 // - engines[reverse] plays the first move (which does not mean white, that depends on the FEN)
@@ -235,7 +232,7 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
     timeLeft[0] = eo[0]->timeoutMatch;
     timeLeft[1] = eo[1]->timeoutMatch;
 
-    // the starting position has been added at game_load_fen()
+    // the starting position has been added at load_fen()
 
     for (ply = 0; ; ei = (1 - ei), ply++) {
         if (played != NONE_MOVE) {
@@ -366,7 +363,7 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         : RESULT_DRAW;
 }
 
-void Game::game_decode_state(str_t *result, str_t *reason, const char* restxt[3]) const
+void Game::decode_state(str_t *result, str_t *reason, const char* restxt[3]) const
 {
     str_cpy_c(result, restxt[RESULT_DRAW]);
     str_clear(reason);
@@ -410,7 +407,7 @@ void Game::game_decode_state(str_t *result, str_t *reason, const char* restxt[3]
         assert(false);
 }
 
-void Game::game_export_pgn(size_t gameIdx, int verbosity, str_t *out) const
+void Game::export_pgn(size_t gameIdx, int verbosity, str_t *out) const
 {
     // Record game id as event name for each game
     str_cat_fmt(out, "[Event \"%I\"]\n", gameIdx);
@@ -431,7 +428,7 @@ void Game::game_export_pgn(size_t gameIdx, int verbosity, str_t *out) const
     // Result in PGN format "1-0", "0-1", "1/2-1/2" (from white pov)
     const char* ResultTxt[3] = { "1-0", "1/2-1/2", "0-1" };
     scope(str_destroy) str_t result = str_init(), reason = str_init();
-    game_decode_state(&result, &reason, ResultTxt);
+    decode_state(&result, &reason, ResultTxt);
     str_cat_fmt(out, "[Result \"%S\"]\n", result);
     str_cat_fmt(out, "[Termination \"%S\"]\n", reason);
 
@@ -456,7 +453,7 @@ void Game::game_export_pgn(size_t gameIdx, int verbosity, str_t *out) const
     str_cat_c(str_cat(out, result), "\n\n");
 }
 
-void Game::game_export_sgf(size_t gameIdx, str_t *out) const
+void Game::export_sgf(size_t gameIdx, str_t *out) const
 {
     const int movePerline = 8;
 
@@ -484,7 +481,7 @@ void Game::game_export_sgf(size_t gameIdx, str_t *out) const
     // Result in SGF format "W+score", "0", "B+score"
     const char* ResultTxt[3] = { "W+1", "0", "B+1" };
     scope(str_destroy) str_t result = str_init(), reason = str_init();
-    game_decode_state(&result, &reason, ResultTxt);
+    decode_state(&result, &reason, ResultTxt);
     str_cat_fmt(out, "RE[%S]", result);
     str_cat_fmt(out, "TE[%S]", reason);
     str_push(out, '\n');
@@ -538,7 +535,7 @@ void Game::game_export_sgf(size_t gameIdx, str_t *out) const
     str_cat_c(out, ")\n\n");
 }
 
-void Game::game_export_samples_csv(FILE *out) const
+void Game::export_samples_csv(FILE *out) const
 {
     for (size_t i = 0; i < vec_size(samples); i++) {
         std::string pos_str = samples[i].pos.to_opening_str(OPENING_POS);
@@ -547,7 +544,7 @@ void Game::game_export_samples_csv(FILE *out) const
     }
 }
 
-void Game::game_export_samples_bin(FILE *out, LZ4F_compressionContext_t lz4Ctx) const
+void Game::export_samples_bin(FILE *out, LZ4F_compressionContext_t lz4Ctx) const
 {
     struct Entry {
         struct EntryHead {
@@ -584,7 +581,7 @@ void Game::game_export_samples_bin(FILE *out, LZ4F_compressionContext_t lz4Ctx) 
     }
 }
 
-void Game::game_export_samples(FILE *out, bool bin, LZ4F_compressionContext_t lz4Ctx) const
+void Game::export_samples(FILE *out, bool bin, LZ4F_compressionContext_t lz4Ctx) const
 {
 #ifdef __MINGW32__
     _lock_file(out);
@@ -593,9 +590,9 @@ void Game::game_export_samples(FILE *out, bool bin, LZ4F_compressionContext_t lz
 #endif
 
     if (bin)
-        game_export_samples_bin(out, lz4Ctx);
+        export_samples_bin(out, lz4Ctx);
     else
-        game_export_samples_csv(out);
+        export_samples_csv(out);
 
 #ifdef __MINGW32__
     _unlock_file(out);

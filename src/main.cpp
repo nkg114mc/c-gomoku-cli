@@ -32,13 +32,13 @@
 
 static Options options;
 static EngineOptions *eo;
-static Openings openings;
-static SeqWriter pgnSeqWriter;
-static SeqWriter sgfSeqWriter;
-static SeqWriter msgSeqWriter;
+static Openings *openings;
+static JobQueue *jq;
+static SeqWriter *pgnSeqWriter;
+static SeqWriter *sgfSeqWriter;
+static SeqWriter *msgSeqWriter;
 static FILE *sampleFile;
 static LZ4F_compressionContext_t sampleFileLz4Ctx;
-static JobQueue jq;
 
 static void main_destroy(void)
 {
@@ -56,17 +56,15 @@ static void main_destroy(void)
         fclose(sampleFile);
     }
 
-    if (options.pgn.len)
-        pgnSeqWriter.seq_writer_destroy();
+    if (pgnSeqWriter)
+        delete pgnSeqWriter;
+    if (sgfSeqWriter)
+        delete sgfSeqWriter;
+    if (msgSeqWriter)
+        delete msgSeqWriter;
 
-    if (options.sgf.len)
-        sgfSeqWriter.seq_writer_destroy();
-
-    if (options.msg.len)
-        msgSeqWriter.seq_writer_destroy();
-
-    openings.openings_destroy(0);
-    jq.job_queue_destroy();
+    delete openings;
+    delete jq;
     options_destroy(&options);
     vec_destroy_rec(eo, engine_options_destroy);
 }
@@ -81,17 +79,17 @@ static void main_init(int argc, const char **argv)
     options = options_init();
     options_parse(argc, argv, &options, &eo);
 
-    jq.job_queue_init(vec_size(eo), options.rounds, options.games, options.gauntlet);
-    openings.openings_init(options.openings.buf, options.random, options.srand, 0);
+    jq = new JobQueue(vec_size(eo), options.rounds, options.games, options.gauntlet);
+    openings = new Openings(options.openings.buf, options.random, options.srand);
 
     if (options.pgn.len)
-        pgnSeqWriter.seq_writer_init(options.pgn.buf, FOPEN_APPEND_MODE);
+        pgnSeqWriter = new SeqWriter(options.pgn.buf, FOPEN_APPEND_MODE);
 
     if (options.sgf.len)
-        sgfSeqWriter.seq_writer_init(options.sgf.buf, FOPEN_APPEND_MODE);
+        sgfSeqWriter = new SeqWriter(options.sgf.buf, FOPEN_APPEND_MODE);
 
     if (options.msg.len)
-        msgSeqWriter.seq_writer_init(options.msg.buf, FOPEN_APPEND_MODE);
+        msgSeqWriter = new SeqWriter(options.msg.buf, FOPEN_APPEND_MODE);
 
     if (options.sp.fileName.len) {
         if (options.sp.compress) {
@@ -132,7 +130,7 @@ static void *thread_start(void *arg)
     int ei[2] = {-1, -1};  // eo[ei[0]] plays eo[ei[1]]: initialize with invalid values to start
     size_t idx = 0, count = 0;  // game idx and count (shared across workers)
 
-    while (jq.job_queue_pop(&job, &idx, &count)) {
+    while (jq->pop(&job, &idx, &count)) {
         // Clear all previous engine messages and write game index
         if (msg) {
             str_cpy_c(msg, "------------------------------\n");
@@ -145,7 +143,7 @@ static void *thread_start(void *arg)
                 ei[i] = job.ei[i];
                 engines[i].destroy();
                 engines[i].init(eo[ei[i]].cmd.buf, eo[ei[i]].name.buf, eo[ei[i]].tolerance, msg);
-                jq.job_queue_set_name(ei[i], engines[i].name.buf);
+                jq->set_name(ei[i], engines[i].name.buf);
             } 
             // Re-init engine if it crashed previously
             else if (engines[i].is_crashed()) {
@@ -155,15 +153,13 @@ static void *thread_start(void *arg)
         }
     
         // Choose opening position
-        size_t openingRound;
-        openings.openings_next(&fen, &openingRound, options.repeat ? idx / 2 : idx, w->id);
+        size_t openingRound = openings->next(&fen, options.repeat ? idx / 2 : idx, w->id);
 
         // Play 1 game
-        Game game;
-        game.game_init(job.round, job.game);
+        Game game(job.round, job.game);
         int color = BLACK; // black play first in gomoku/renju by default
 
-        if (!game.game_load_fen(&fen, &color, &options, openingRound)) {
+        if (!game.load_fen(&fen, &color, &options, openingRound)) {
             DIE("[%d] illegal FEN '%s'\n", w->id, fen.buf);
         }
 
@@ -177,44 +173,44 @@ static void *thread_start(void *arg)
             str_cat_fmt(msg, "Engines: %S x %S\n", engines[blackIdx].name, engines[whiteIdx].name);
 
         const EngineOptions *eoPair[2] = {&eo[ei[0]], &eo[ei[1]]};
-        const int wld = game.game_play(w, &options, engines, eoPair, job.reverse);
+        const int wld = game.play(w, &options, engines, eoPair, job.reverse);
 
         if (!options.gauntlet || !options.saveLoseOnly || wld == RESULT_LOSS) {
             // Write to PGN file
-            if (options.pgn.len) {
+            if (pgnSeqWriter) {
                 const int pgnVerbosity = 0;
                 scope(str_destroy) str_t pgnText = str_init();
-                game.game_export_pgn(idx + 1, pgnVerbosity, &pgnText);
-                pgnSeqWriter.seq_writer_push(idx, pgnText);
+                game.export_pgn(idx + 1, pgnVerbosity, &pgnText);
+                pgnSeqWriter->push(idx, pgnText);
             }
 
             // Write to SGF file
-            if (options.sgf.len) {
+            if (sgfSeqWriter) {
                 scope(str_destroy) str_t sgfText = str_init();
-                game.game_export_sgf(idx + 1, &sgfText);
-                sgfSeqWriter.seq_writer_push(idx, sgfText);
+                game.export_sgf(idx + 1, &sgfText);
+                sgfSeqWriter->push(idx, sgfText);
             }
 
             // Write engine messages to TXT file
-            if (msg)
-                msgSeqWriter.seq_writer_push(idx, messages);
+            if (msgSeqWriter)
+                msgSeqWriter->push(idx, messages);
 
             // Write to Sample file
             if (options.sp.fileName.len)
-                game.game_export_samples(sampleFile, options.sp.bin, sampleFileLz4Ctx);
+                game.export_samples(sampleFile, options.sp.bin, sampleFileLz4Ctx);
         }
 
         // Write to stdout a one line summary of the game
         const char* ResultTxt[3] = { "0-1", "1/2-1/2", "1-0" }; // Black-White
         scope(str_destroy) str_t result = str_init(), reason = str_init();
-        game.game_decode_state(&result, &reason, ResultTxt);
+        game.decode_state(&result, &reason, ResultTxt);
 
         printf("[%d] Finished game %zu (%s vs %s): %s {%s}\n", w->id, idx + 1,
             engines[blackIdx].name.buf, engines[whiteIdx].name.buf, result.buf, reason.buf);
 
         // Pair update
         int wldCount[3] = {0};
-        jq.job_queue_add_result(job.pair, wld, wldCount);
+        jq->add_result(job.pair, wld, wldCount);
         const int n = wldCount[RESULT_WIN] + wldCount[RESULT_LOSS] + wldCount[RESULT_DRAW];
         printf("Score of %s vs %s: %d - %d - %d  [%.3f] %d\n", engines[0].name.buf,
             engines[1].name.buf, wldCount[RESULT_WIN], wldCount[RESULT_LOSS], wldCount[RESULT_DRAW],
@@ -222,15 +218,13 @@ static void *thread_start(void *arg)
 
         // SPRT update
         if (options.sprt && sprt_done(wldCount, &options.sprtParam)) {
-            jq.job_queue_stop();
+            jq->stop();
         }
 
         // Tournament update
         if (vec_size(eo) > 2) {
-            jq.job_queue_print_results((size_t)options.games);
+            jq->print_results((size_t)options.games);
         }
-
-        game.game_destroy();
     }
 
     for (int i = 0; i < 2; i++) {
@@ -270,7 +264,7 @@ int main(int argc, const char **argv)
                     Workers[i].deadline.engineName.c_str(), Workers[i].deadline.description.c_str());
             }
         }
-    } while (!jq.job_queue_done());
+    } while (!jq->done());
 
     // Join threads[]
     for (int i = 0; i < options.concurrency; i++) {

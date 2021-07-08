@@ -35,23 +35,24 @@ struct Job {
 // Job Queue: consumed by workers to play tournament (thread safe)
 class JobQueue {
 public:
+    JobQueue(int engines, int rounds, int games, bool gauntlet);
+    ~JobQueue();
+
+    bool pop(Job *j, size_t *idx, size_t *count);
+    void add_result(int pair, int outcome, int count[3]);
+    bool done();
+    void stop();
+
+    void set_name(int ei, const char *name);
+    void print_results(size_t frequency);
+
+public:
     pthread_mutex_t mtx;
     Job *jobs;
     size_t idx;  // next job index
     size_t completed;  // number of jobs completed
     str_t *names;
     Result *results;
-
-    void job_queue_init(int engines, int rounds, int games, bool gauntlet);
-    void job_queue_destroy();
-
-    bool job_queue_pop(Job *j, size_t *idx, size_t *count);
-    void job_queue_add_result(int pair, int outcome, int count[3]);
-    bool job_queue_done();
-    void job_queue_stop();
-
-    void job_queue_set_name(int ei, const char *name);
-    void job_queue_print_results(size_t frequency);
 };
 
 

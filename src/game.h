@@ -54,18 +54,18 @@ public:
     GameRule game_rule; // rule is gomoku or renju, etc
     int round, game, ply, state, board_size;
 
-    void game_init(int round, int game);
-    void game_destroy();
+    Game(int round, int game);
+    ~Game();
 
-    bool game_load_fen(str_t *fen, int *color, const Options *o, size_t round);
+    bool load_fen(str_t *fen, int *color, const Options *o, size_t round);
 
-    int game_play(Worker *w, const Options *o, Engine engines[2],
+    int play(Worker *w, const Options *o, Engine engines[2],
         const EngineOptions *eo[2], bool reverse);
 
-    void game_decode_state(str_t *result, str_t *reason, const char* restxt[3]) const;
-    void game_export_pgn(size_t gameIdx, int verbosity, str_t *out) const;
-    void game_export_sgf(size_t gameIdx, str_t *out) const;
-    void game_export_samples(FILE *out, bool bin, LZ4F_compressionContext_t lz4Ctx = nullptr) const;
+    void decode_state(str_t *result, str_t *reason, const char* restxt[3]) const;
+    void export_pgn(size_t gameIdx, int verbosity, str_t *out) const;
+    void export_sgf(size_t gameIdx, str_t *out) const;
+    void export_samples(FILE *out, bool bin, LZ4F_compressionContext_t lz4Ctx = nullptr) const;
 
 private:
     void compute_time_left(const EngineOptions *eo, int64_t *timeLeft);
@@ -78,6 +78,6 @@ private:
                                    const Options *option,
                                    Worker *w, 
                                    Engine *engine);
-    void game_export_samples_csv(FILE *out) const;
-    void game_export_samples_bin(FILE *out, LZ4F_compressionContext_t lz4Ctx) const;
+    void export_samples_csv(FILE *out) const;
+    void export_samples_bin(FILE *out, LZ4F_compressionContext_t lz4Ctx) const;
 };

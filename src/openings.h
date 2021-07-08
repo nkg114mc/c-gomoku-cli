@@ -27,12 +27,9 @@ public:
     FILE *file;
     long *index;  // vector of file offsets
 
-    void openings_init(const char *fileName, bool random, uint64_t srand, int threadId);
-    void openings_destroy(int threadId);
+    Openings(const char *fileName, bool random, uint64_t srand);
+    ~Openings();
 
-    void openings_next(str_t *fen, size_t *round, size_t idx, int threadId);
-
-    //static bool openings_validate_opening_str(str_t &line);
+    size_t next(str_t *fen, size_t idx, int threadId);
 };
-
 
