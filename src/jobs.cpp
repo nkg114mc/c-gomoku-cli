@@ -36,8 +36,6 @@ JobQueue::JobQueue(int engines, int rounds, int games, bool gauntlet) : idx(0), 
 {
     assert(engines >= 2 && rounds >= 1 && games >= 1);
 
-    pthread_mutex_init(&mtx, NULL);
-
     jobs = vec_init(Job);
     results = vec_init(Result);
     names = vec_init(str_t);
@@ -83,66 +81,59 @@ JobQueue::~JobQueue()
     vec_destroy(results);
     vec_destroy(jobs);
     vec_destroy_rec(names, str_destroy);
-    pthread_mutex_destroy(&mtx);
 }
 
 bool JobQueue::pop(Job *j, size_t *idx_in, size_t *count)
 {
-    pthread_mutex_lock(&mtx);
-    const bool ok = this->idx < vec_size(this->jobs);
+    std::lock_guard lock(mtx);
 
-    if (ok) {
+    if (this->idx < vec_size(this->jobs)) {
         *j = this->jobs[this->idx];
         *idx_in = this->idx++;
         *count = vec_size(this->jobs);
+        return true;
     }
 
-    pthread_mutex_unlock(&mtx);
-    return ok;
+    return false;
 }
 
 // Add game outcome, and return updated totals
 void JobQueue::add_result(int pair, int outcome, int count[3])
 {
-    pthread_mutex_lock(&mtx);
+    std::lock_guard lock(mtx);
+
     results[pair].count[outcome]++;
     completed++;
 
     for (size_t i = 0; i < 3; i++)
         count[i] = results[pair].count[i];
-
-    pthread_mutex_unlock(&mtx);
 }
 
 bool JobQueue::done()
 {
-    pthread_mutex_lock(&mtx);
+    std::lock_guard lock(mtx);
+
     assert(idx <= vec_size(jobs));
-    const bool done = idx == vec_size(jobs);
-    pthread_mutex_unlock(&mtx);
-    return done;
+    return idx == vec_size(jobs);
 }
 
 void JobQueue::stop()
 {
-    pthread_mutex_lock(&mtx);
+    std::lock_guard lock(mtx);
     idx = vec_size(jobs);
-    pthread_mutex_unlock(&mtx);
 }
 
 void JobQueue::set_name(int ei, const char *name)
 {
-    pthread_mutex_lock(&mtx);
+    std::lock_guard lock(mtx);
 
     if (!names[ei].len)
         str_cpy_c(&names[ei], name);
-
-    pthread_mutex_unlock(&mtx);
 }
 
 void JobQueue::print_results(size_t frequency)
 {
-    pthread_mutex_lock(&mtx);
+    std::lock_guard lock(mtx);
 
     if (completed && completed % frequency == 0) {
         scope(str_destroy) str_t out = str_init_from_c("Tournament update:\n");
@@ -162,6 +153,4 @@ void JobQueue::print_results(size_t frequency)
 
         fputs(out.buf, stdout);
     }
-
-    pthread_mutex_unlock(&mtx);
 }

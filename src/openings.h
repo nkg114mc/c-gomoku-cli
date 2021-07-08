@@ -15,15 +15,13 @@
  */
 
 #pragma once
-#include <inttypes.h>
-#include <pthread.h>
-#include <stdbool.h>
-#include <stdio.h>
+#include <mutex>
+#include <cstdio>
 #include "str.h"
 
 class Openings {
 public:
-    pthread_mutex_t mtx;
+    std::mutex mtx;
     FILE *file;
     long *index;  // vector of file offsets
 

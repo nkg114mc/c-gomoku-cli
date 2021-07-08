@@ -15,8 +15,7 @@
  */
 
 #pragma once
-#include <pthread.h>
-#include <stdbool.h>
+#include <mutex>
 #include "str.h"
 
 // Result for each pair (e1, e2); e1 < e2. Stores count of game outcomes from e1's point of view.
@@ -47,12 +46,11 @@ public:
     void print_results(size_t frequency);
 
 public:
-    pthread_mutex_t mtx;
+    std::mutex mtx;
     Job *jobs;
     size_t idx;  // next job index
     size_t completed;  // number of jobs completed
     str_t *names;
     Result *results;
 };
-
 

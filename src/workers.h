@@ -15,9 +15,7 @@
  */
 
 #pragma once
-#include <pthread.h>
-#include <cinttypes>
-#include <cstdbool>
+#include <mutex>
 #include <cstdio>
 #include <functional>
 #include <vector>
@@ -35,7 +33,7 @@ enum {
 class Worker {
 public:
     struct Deadline_t {
-        pthread_mutex_t mtx;
+        std::mutex mtx;
         int64_t timeLimit;
         std::string engineName;
         std::string description;
@@ -58,6 +56,4 @@ public:
     void deadline_callback_once();
     int64_t deadline_overdue();
 };
-
-extern std::vector<Worker> Workers;
 

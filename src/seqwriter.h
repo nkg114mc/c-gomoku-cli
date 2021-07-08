@@ -15,8 +15,7 @@
  */
 
 #pragma once
-#include <pthread.h>
-#include <assert.h>
+#include <mutex>
 #include <cstdio>
 #include "str.h"
 
@@ -29,7 +28,7 @@ struct SeqStr {
 
 class SeqWriter {
 public:
-    pthread_mutex_t mtx;
+    std::mutex mtx;
     SeqStr *buf;
     FILE *out;
     size_t idxNext;

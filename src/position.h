@@ -17,7 +17,7 @@
 #pragma once
 #include <vector>
 #include <string>
-#include <cassert>
+#include <assert.h>
 #include "str.h"
 
 typedef uint16_t move_t;

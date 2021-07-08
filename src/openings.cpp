@@ -56,8 +56,6 @@ Openings::Openings(const char *fileName, bool random, uint64_t srand) : file(nul
 
         printf("Load opening file %s\n", fileName);
     }
-
-    pthread_mutex_init(&mtx, NULL);
 }
 
 Openings::~Openings()
@@ -65,7 +63,6 @@ Openings::~Openings()
     if (file)
         DIE_IF(0, fclose(file) < 0);
 
-    pthread_mutex_destroy(&mtx);
     vec_destroy(index);
 }
 
@@ -80,10 +77,11 @@ size_t Openings::next(str_t *fen, size_t idx, int threadId)
     // Read 'fen' from file
     scope(str_destroy) str_t line = str_init();
 
-    pthread_mutex_lock(&mtx);
-    DIE_IF(threadId, fseek(file, index[idx % vec_size(index)], SEEK_SET) < 0);
-    DIE_IF(threadId, !str_getline(&line, file));
-    pthread_mutex_unlock(&mtx);
+    {
+        std::lock_guard lock(mtx);
+        DIE_IF(threadId, fseek(file, index[idx % vec_size(index)], SEEK_SET) < 0);
+        DIE_IF(threadId, !str_getline(&line, file));
+    }
 
     str_cpy(fen, line);
     return idx / vec_size(index);

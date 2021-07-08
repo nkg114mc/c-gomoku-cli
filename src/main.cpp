@@ -16,7 +16,7 @@
 
 #include <iostream>
 #include <assert.h>
-#include <pthread.h>
+#include <thread>
 #include <stdlib.h>
 #include "engine.h"
 #include "game.h"
@@ -37,12 +37,15 @@ static JobQueue *jq;
 static SeqWriter *pgnSeqWriter;
 static SeqWriter *sgfSeqWriter;
 static SeqWriter *msgSeqWriter;
+static std::vector<Worker*> workers;
 static FILE *sampleFile;
 static LZ4F_compressionContext_t sampleFileLz4Ctx;
 
 static void main_destroy(void)
 {
-    Workers.clear();
+    for (Worker* worker : workers)
+        delete worker;
+    workers.clear();
 
     if (options.sp.fileName.len) {
         if (options.sp.compress) {
@@ -114,11 +117,11 @@ static void main_init(int argc, const char **argv)
             str_cat_fmt(&logName, "c-gomoku-cli.%i.log", i + 1);
         }
 
-        Workers.push_back(Worker {i, logName.buf});
+        workers.push_back(new Worker (i, logName.buf));
     }
 }
 
-static void *thread_start(void *arg)
+static void thread_start(void *arg)
 {
     Worker *w = (Worker*)arg;
     Engine engines[2] = {{w, options.debug}, {w, options.debug}};
@@ -230,8 +233,6 @@ static void *thread_start(void *arg)
     for (int i = 0; i < 2; i++) {
         engines[i].destroy();
     }
-
-    return NULL;
 }
 
 int main(int argc, const char **argv)
@@ -239,10 +240,10 @@ int main(int argc, const char **argv)
     main_init(argc, argv);
 
     // Start threads[]
-    pthread_t threads[options.concurrency];
+    std::vector<std::thread> threads;
 
     for (int i = 0; i < options.concurrency; i++) {
-        pthread_create(&threads[i], NULL, thread_start, &Workers[i]);
+        threads.emplace_back(thread_start, workers[i]);
     }
 
     // Main thread loop: check deadline overdue at regular intervals
@@ -256,19 +257,19 @@ int main(int argc, const char **argv)
         // are likely to face a completely unresponsive engine, where any attempt at I/O will block
         // the master thread, on top of the already blocked worker. Hence, we must DIE().
         for (int i = 0; i < options.concurrency; i++) {
-            int64_t overdue = Workers[i].deadline_overdue();
+            int64_t overdue = workers[i]->deadline_overdue();
             if (overdue > 0) {
-                Workers[i].deadline_callback_once();
+                workers[i]->deadline_callback_once();
             } else if (overdue > 1000) {
-                DIE("[%d] engine %s is unresponsive to [%s]\n", Workers[i].id,
-                    Workers[i].deadline.engineName.c_str(), Workers[i].deadline.description.c_str());
+                DIE("[%d] engine %s is unresponsive to [%s]\n", workers[i]->id,
+                    workers[i]->deadline.engineName.c_str(), workers[i]->deadline.description.c_str());
             }
         }
     } while (!jq->done());
 
     // Join threads[]
-    for (int i = 0; i < options.concurrency; i++) {
-        pthread_join(threads[i], NULL);
+    for (std::thread& th : threads) {
+        th.join();
     }
 
     return 0;

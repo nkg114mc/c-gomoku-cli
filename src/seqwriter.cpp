@@ -38,12 +38,10 @@ SeqWriter::SeqWriter(const char *fileName, const char *mode) : idxNext(0)
 {
     out = fopen(fileName, mode);
     buf = vec_init(SeqStr);
-    pthread_mutex_init(&mtx, NULL);
 }
 
 SeqWriter::~SeqWriter()
 {
-    pthread_mutex_destroy(&this->mtx);
     //vec_destroy_rec(this->buf, destroy);
 
     // write out all records even if not sequential
@@ -54,7 +52,7 @@ SeqWriter::~SeqWriter()
 
 void SeqWriter::push(size_t idx, str_t str)
 {
-    pthread_mutex_lock(&mtx);
+    std::lock_guard lock(mtx);
 
     // Append to buf[n]
     const size_t n = vec_size(buf);
@@ -81,8 +79,6 @@ void SeqWriter::push(size_t idx, str_t str)
 
     if (i)
         write_to_i(i);
-
-    pthread_mutex_unlock(&mtx);
 }
 
 void SeqWriter::write_to_i(size_t i) {
