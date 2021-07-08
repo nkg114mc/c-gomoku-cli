@@ -123,7 +123,7 @@ static void main_init(int argc, const char **argv)
 static void *thread_start(void *arg)
 {
     Worker *w = (Worker*)arg;
-    Engine engines[2] = {0};
+    Engine engines[2] = {{w, options.debug}, {w, options.debug}};
 
     scope(str_destroy) str_t fen = str_init();
     scope(str_destroy) str_t messages = str_init();
@@ -143,18 +143,14 @@ static void *thread_start(void *arg)
         for (int i = 0; i < 2; i++) {
             if (job.ei[i] != ei[i]) {
                 ei[i] = job.ei[i];
-                engines[i].tolerance = eo[ei[i]].tolerance;
-
-                if (engines[i].pid)
-                    engines[i].engine_destroy(w);
-
-                engines[i].engine_init(w, eo[ei[i]].cmd.buf, eo[ei[i]].name.buf, options.debug, msg);
+                engines[i].destroy();
+                engines[i].init(eo[ei[i]].cmd.buf, eo[ei[i]].name.buf, eo[ei[i]].tolerance, msg);
                 jq.job_queue_set_name(ei[i], engines[i].name.buf);
             } 
             // Re-init engine if it crashed previously
-            else if (!engines[i].in) {
-                engines[i].engine_destroy(w);
-                engines[i].engine_init(w, eo[ei[i]].cmd.buf, eo[ei[i]].name.buf, options.debug, msg);
+            else if (engines[i].is_crashed()) {
+                engines[i].destroy();
+                engines[i].init(eo[ei[i]].cmd.buf, eo[ei[i]].name.buf, eo[ei[i]].tolerance, msg);
             }
         }
     
@@ -238,7 +234,7 @@ static void *thread_start(void *arg)
     }
 
     for (int i = 0; i < 2; i++) {
-        engines[i].engine_destroy(w);
+        engines[i].destroy();
     }
 
     return NULL;

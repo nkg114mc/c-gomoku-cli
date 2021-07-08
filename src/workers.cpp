@@ -3,8 +3,26 @@
 #include "util.h"
 #include "vec.h"
 
-
 std::vector<Worker> Workers;
+
+Worker::Worker(int i, const char *logName) : id(i + 1), seed(i), log(nullptr)
+{
+    pthread_mutex_init(&deadline.mtx, NULL);
+    if (*logName) {
+        log = fopen(logName, FOPEN_WRITE_MODE);
+        DIE_IF(0, !log);
+    }
+}
+
+Worker::~Worker()
+{
+    pthread_mutex_destroy(&deadline.mtx);
+    if (log) {
+        DIE_IF(0, fclose(log) < 0);
+        log = NULL;
+    }
+}
+
 
 void Worker::deadline_set(const char *engineName, int64_t timeLimit, 
     const char *description, std::function<void()> callback)
@@ -68,26 +86,4 @@ int64_t Worker::deadline_overdue()
         return time - timeLimit;
     else
         return 0;
-}
-
-Worker::Worker(int i, const char *logName)
-{
-    seed = (uint64_t)i;
-    id = i + 1;
-    pthread_mutex_init(&deadline.mtx, NULL);
-
-    log = NULL;
-    if (*logName) {
-        log = fopen(logName, FOPEN_WRITE_MODE);
-        DIE_IF(0, !log);
-    }
-}
-
-Worker::~Worker()
-{
-    pthread_mutex_destroy(&deadline.mtx);
-    if (log) {
-        DIE_IF(0, fclose(log) < 0);
-        log = NULL;
-    }
 }

@@ -53,7 +53,6 @@ public:
     Sample *samples;  // list of samples when generating training data
     GameRule game_rule; // rule is gomoku or renju, etc
     int round, game, ply, state, board_size;
-    
 
     void game_init(int round, int game);
     void game_destroy();
@@ -70,7 +69,7 @@ public:
 
 private:
     void compute_time_left(const EngineOptions *eo, int64_t *timeLeft);
-    void send_board_command(Position *pos, Worker *w, Engine *engine);
+    void send_board_command(const Position *pos, Worker *w, Engine *engine);
     void gomocup_turn_info_command(const EngineOptions *eo, 
                                    const int64_t timeLeft, 
                                    Worker *w, 

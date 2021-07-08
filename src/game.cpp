@@ -62,7 +62,7 @@ void Game::game_init(int rd, int gm)
     this->samples = vec_init(Sample);
 }
 
-bool Game::game_load_fen(str_t *fen, int *color, const Options *o, size_t round)
+bool Game::game_load_fen(str_t *fen, int *color, const Options *o, size_t curRound)
 {
     Position p0(o->boardSize);
     vec_push(pos, p0, Position);
@@ -74,7 +74,7 @@ bool Game::game_load_fen(str_t *fen, int *color, const Options *o, size_t round)
     }
 
     if (o->transform) {
-        TransformType transType = (TransformType)(round % NB_TRANS);
+        TransformType transType = (TransformType)(curRound % NB_TRANS);
         pos[0].transform(transType);
     }
 
@@ -99,7 +99,7 @@ void Game::gomocup_turn_info_command(const EngineOptions *eo,
 
     str_cpy_c(&cmd, "");
     str_cat_fmt(&cmd, "INFO time_left %I", timeLeft);
-    engine->engine_writeln(w, cmd.buf);
+    engine->writeln(cmd.buf);
 }
 
 void Game::gomocup_game_info_command(const EngineOptions *eo,
@@ -112,42 +112,42 @@ void Game::gomocup_game_info_command(const EngineOptions *eo,
     // game info
     str_cpy_c(&cmd, "");
     str_cat_fmt(&cmd, "INFO rule %i", option->gameRule);
-    engine->engine_writeln(w, cmd.buf);
+    engine->writeln(cmd.buf);
 
     // time control info
     if (eo->timeoutTurn) {
         str_cpy_c(&cmd, "");
         str_cat_fmt(&cmd, "INFO timeout_turn %I", eo->timeoutTurn);
-        engine->engine_writeln(w, cmd.buf);
+        engine->writeln(cmd.buf);
     }
 
     // always send match timeout info (0 means no limit in match time)
     str_cpy_c(&cmd, "");
     str_cat_fmt(&cmd, "INFO timeout_match %I", eo->timeoutMatch);
-    engine->engine_writeln(w, cmd.buf);
+    engine->writeln(cmd.buf);
 
     if (eo->depth) {
         str_cpy_c(&cmd, "");
         str_cat_fmt(&cmd, "INFO max_depth %i", eo->depth);
-        engine->engine_writeln(w, cmd.buf);
+        engine->writeln(cmd.buf);
     }
 
     if (eo->nodes) {
         str_cpy_c(&cmd, "");
         str_cat_fmt(&cmd, "INFO max_node %I", eo->nodes);
-        engine->engine_writeln(w, cmd.buf);
+        engine->writeln(cmd.buf);
     }
 
     // memory limit info
     str_cpy_c(&cmd, "");
     str_cat_fmt(&cmd, "INFO max_memory %I", eo->maxMemory);
-    engine->engine_writeln(w, cmd.buf);
+    engine->writeln(cmd.buf);
 
     // multi threading info
     if (eo->numThreads > 1) {
         str_cpy_c(&cmd, "");
         str_cat_fmt(&cmd, "INFO thread_num %i", eo->numThreads);
-        engine->engine_writeln(w, cmd.buf);
+        engine->writeln(cmd.buf);
     }
 
     // custom info
@@ -157,13 +157,13 @@ void Game::gomocup_game_info_command(const EngineOptions *eo,
 
         str_cpy_c(&cmd, "");
         str_cat_fmt(&cmd, "INFO %S %S", left, right);
-        engine->engine_writeln(w, cmd.buf);
+        engine->writeln(cmd.buf);
     }
 }
 
-void Game::send_board_command(Position *pos, Worker *w, Engine *engine)
+void Game::send_board_command(const Position *pos, Worker *w, Engine *engine)
 {
-    engine->engine_writeln(w, "BOARD");
+    engine->writeln("BOARD");
 
     int moveCnt = pos->get_move_count();
     const move_t *histMoves = pos->get_hist_moves();
@@ -180,10 +180,10 @@ void Game::send_board_command(Position *pos, Worker *w, Engine *engine)
         scope(str_destroy) str_t cmd = str_init();
         str_cpy_c(&cmd, "");
         str_cat_fmt(&cmd, "%i,%i,%i", CoordX(p), CoordY(p), gomocupColorIdx);
-        engine->engine_writeln(w, cmd.buf);
+        engine->writeln(cmd.buf);
     }
 
-    engine->engine_writeln(w, "DONE");
+    engine->writeln("DONE");
 }
 
 void Game::compute_time_left(const EngineOptions *eo, int64_t *timeLeft) {
@@ -216,8 +216,8 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         scope(str_destroy) str_t startCmd = str_init();
         str_cpy_c(&startCmd, "");
         str_cat_fmt(&startCmd, "START %i", o->boardSize);
-        engines[i].engine_writeln(w, startCmd.buf);
-        engines[i].engine_wait_for_ok(w);
+        engines[i].writeln(startCmd.buf);
+        engines[i].wait_for_ok();
 
         // send game info
         gomocup_game_info_command(eo[i], o, w, &(engines[i]));
@@ -230,8 +230,6 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
     int ei = reverse;  // engines[ei] has the move
     int64_t timeLeft[2] = {0LL, 0LL};//{eo[0]->time, eo[1]->time};
     bool canUseTurn[2] = {false, false};
-
-    scope(str_destroy) str_t pv = str_init();
 
     // init time control
     timeLeft[0] = eo[0]->timeoutMatch;
@@ -267,30 +265,25 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         
         // trigger think!
         if (pos[ply].get_move_count() == 0) {
-            engines[ei].engine_writeln(w, "BEGIN");
+            engines[ei].writeln("BEGIN");
             canUseTurn[ei] = true;
         } else {
             if (o->useTURN && canUseTurn[ei]) { // use TURN to trigger think
                 str_cpy_c(&cmd, "");
                 str_cat_fmt(&cmd, "TURN %s", pos[ply].move_to_gomostr(played).c_str());
-                engines[ei].engine_writeln(w, cmd.buf);
+                engines[ei].writeln(cmd.buf);
             } else { // use BOARD to trigger think
                 send_board_command(&(pos[ply]), w, &(engines[ei]));
                 canUseTurn[ei] = true;
             }
         }
 
-        Info info {};
-        const bool ok = engines[ei].engine_bestmove(w, &timeLeft[ei], eo[ei]->timeoutTurn,
-                                                    &best, &pv, &info, pos[ply].get_move_count() + 1);
-        vec_push(this->info, info, Info);
+        Info moveInfo {};
+        const bool ok = engines[ei].bestmove(&timeLeft[ei], eo[ei]->timeoutTurn,
+                                             &best, &moveInfo, pos[ply].get_move_count() + 1);
+        vec_push(this->info, moveInfo, Info);
 
-        // Parses the last PV sent. An invalid PV is not fatal, but logs some warnings. Keep track
-        // of the resolved position, which is the last in the PV that is not in check (or the
-        // current one if that's impossible).
-        //Position resolved = resolve_pv(w, g, pv.buf);
-
-        if (!ok) {  // engine crashed in engine_bestmove() 
+        if (!ok) {  // engine crashed in bestmove() 
             std::printf("[%d] engine %s crashed at %d moves after opening\n", 
                 w->id, engines[ei].name.buf, ply);
             state = STATE_CRASHED;
@@ -319,7 +312,7 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         }
 
         // Apply draw adjudication rule
-        if (o->drawCount && abs(info.score) <= o->drawScore) {
+        if (o->drawCount && abs(moveInfo.score) <= o->drawScore) {
             if (++drawPlyCount >= 2 * o->drawCount) {
                 state = STATE_DRAW_ADJUDICATION;
                 break;
@@ -329,7 +322,7 @@ int Game::game_play(Worker *w, const Options *o, Engine engines[2],
         }
 
         // Apply resign rule
-        if (o->resignCount && info.score <= -o->resignScore) {
+        if (o->resignCount && moveInfo.score <= -o->resignScore) {
             if (++resignCount[ei] >= o->resignCount) {
                 state = STATE_RESIGN;
                 break;
@@ -532,8 +525,8 @@ void Game::game_export_sgf(size_t gameIdx, str_t *out) const
         if (j < openingMoveCnt) {
             str_cat_c(out, "C[opening move]");
         } else {
-            const int dep = this->info[thinkPly].depth;
-            const int scr = this->info[thinkPly].score;
+            //const int dep = this->info[thinkPly].depth;
+            //const int scr = this->info[thinkPly].score;
             const int64_t tim = this->info[thinkPly].time;
             //str_cat_fmt(out, "C[%i/%i %Ims]", scr, dep, tim);
             str_cat_fmt(out, "C[%Ims]", tim);
@@ -569,19 +562,19 @@ void Game::game_export_samples_bin(FILE *out, LZ4F_compressionContext_t lz4Ctx) 
     char buf[bufSize];
 
     for (size_t i = 0; i < vec_size(samples); i++) {
-        int ply = samples[i].pos.get_move_count();
+        int moveply = samples[i].pos.get_move_count();
         const move_t *hist_moves = samples[i].pos.get_hist_moves();
-        assert(ply < 1024);
+        assert(moveply < 1024);
         
         e.head.boardsize = samples[i].pos.get_size();
-        e.head.ply = ply;
+        e.head.ply = moveply;
         e.head.result = samples[i].result;
         e.head.move = samples[i].move;
-        for (int iMove = 0; iMove < ply; iMove++) {
+        for (int iMove = 0; iMove < moveply; iMove++) {
             e.position[iMove] = PosFromMove(hist_moves[iMove]);
         }
 
-        const size_t entrySize = sizeof(Entry::EntryHead) + sizeof(uint16_t) * ply;
+        const size_t entrySize = sizeof(Entry::EntryHead) + sizeof(uint16_t) * moveply;
         if (lz4Ctx) {
             size_t size = LZ4F_compressUpdate(lz4Ctx, buf, bufSize, &e, entrySize, nullptr);
             fwrite(buf, size, 1, out);

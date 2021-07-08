@@ -22,8 +22,10 @@
 #include <cinttypes>
 #include <cstdbool>
 #include <cstdio>
+#include <string>
 #include "str.h"
-#include "workers.h"
+
+class Worker;
 
 // Elements remembered from parsing info lines (for writing PGN comments)
 struct Info {
@@ -34,6 +36,26 @@ struct Info {
 // Engine process
 class Engine {
 public:
+    str_t name;
+
+    Engine(Worker *worker, bool debug);
+    ~Engine();
+
+    void init(const char *cmd, const char *name, int64_t tolerance, str_t *outmsg);
+    void destroy();
+
+    bool readln(str_t *line);
+    void writeln(const char *buf);
+
+    void wait_for_ok();
+    bool bestmove(int64_t *timeLeft, int64_t maxTurnTime, str_t *best, Info *info, int moveply);
+
+    bool is_crashed() const;
+
+private:
+    Worker *const w;
+    const bool isDebug;
+
 #ifdef __MINGW32__
     long  pid;
     void* hProcess;
@@ -42,23 +64,12 @@ public:
 #endif
 
     FILE *in, *out;
-    str_t name;
     str_t *messages;
     int64_t tolerance;
-    bool isDebug;
 
-    void engine_init(Worker *w, const char *cmd, const char *name, bool debug, str_t *outmsg);
-    void engine_destroy(Worker *w);
-
-    bool engine_readln(Worker *w, str_t *line);
-    void engine_writeln(const Worker *w, const char *buf);
-
-    void engine_sync(Worker *w);
-    void engine_wait_for_ok(Worker *w);
-    bool engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, str_t *best, str_t *pv, Info *info, int moveply);
-
-    void engine_about(Worker *w, const char* fallbackName);
+    void spawn(const char *cwd, const char *run, char **argv, bool readStdErr);
+    void parse_about(const char* fallbackName);
     // process MESSAGE, UNKNOWN, ERROR, DEBUG messages
-    void engine_process_message_ifneeded(const char *line);
-    void engine_parse_thinking_messages(const char *line, Info *info);
+    void process_message_ifneeded(const char *line);
+    void parse_thinking_messages(const char *line, Info *info);
 };

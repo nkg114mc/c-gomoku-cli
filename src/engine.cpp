@@ -44,16 +44,28 @@
 #include "util.h"
 #include "vec.h"
 #include "position.h"
+#include "workers.h"
 
-static void engine_spawn(const Worker *w, Engine *e, 
-    const char *cwd, const char *run, char **argv, bool readStdErr)
+Engine::Engine(Worker *worker, bool debug) : w(worker) , isDebug(debug), pid(0)
+{
+    name = str_init();
+}
+
+Engine::~Engine() 
+{
+    if (pid)
+        destroy();
+    str_destroy(&name);
+}
+
+void Engine::spawn(const char *cwd, const char *run, char **argv, bool readStdErr)
 {
     assert(argv[0]);
 
 #if defined(__MINGW32__)
     // Setup the global job handle and job info, then bind parent process to it.
     // (This will only be called once)
-    static HANDLE hJob = [w]() {
+    [[maybe_unused]] static HANDLE handleJob = [this]() {
         HANDLE hJob = CreateJobObject(NULL, NULL);
         DIE_IF(w->id, !hJob);
 
@@ -145,8 +157,8 @@ static void engine_spawn(const Worker *w, Engine *e,
     }
 
     // Keep the handle to the child process
-    e->pid = piProcInfo.dwProcessId;
-    e->hProcess = piProcInfo.hProcess;
+    this->pid = piProcInfo.dwProcessId;
+    this->hProcess = piProcInfo.hProcess;
     // Close the handle to the child's primary thread
     DIE_IF(w->id, !CloseHandle(piProcInfo.hThread));
 
@@ -155,14 +167,14 @@ static void engine_spawn(const Worker *w, Engine *e,
     int stdout_fd = _open_osfhandle((intptr_t)p_stdout[0], _O_RDONLY | _O_TEXT);
     DIE_IF(w->id, stdin_fd == -1);
     DIE_IF(w->id, stdout_fd == -1);
-    DIE_IF(w->id, !(e->in = _fdopen(stdout_fd, "r")));
-    DIE_IF(w->id, !(e->out = _fdopen(stdin_fd, "w")));
+    DIE_IF(w->id, !(this->in = _fdopen(stdout_fd, "r")));
+    DIE_IF(w->id, !(this->out = _fdopen(stdin_fd, "w")));
 
     // Bind child process to the global job, so child process is killed when
     // parent process exits. (This is not needed actually, when parent process
     // already belongs to one job, all subprocesses it creates will automatically
     // be binded to the job by default).
-    // DIE_IF(w->id, !AssignProcessToJobObject(hJob, e->hProcess));
+    // DIE_IF(w->id, !AssignProcessToJobObject(handleJob, this->hProcess));
 #else
     // Pipe diagram: Parent -> [1]into[0] -> Child -> [1]outof[0] -> Parent
     // 'into' and 'outof' are pipes, each with 2 ends: read=0, write=1
@@ -176,9 +188,9 @@ static void engine_spawn(const Worker *w, Engine *e,
     DIE_IF(w->id, pipe(into) < 0);
 #endif
 
-    DIE_IF(w->id, (e->pid = fork()) < 0);
+    DIE_IF(w->id, (this->pid = fork()) < 0);
 
-    if (e->pid == 0) {
+    if (this->pid == 0) {
 #ifdef __linux__
         prctl(PR_SET_PDEATHSIG, SIGHUP);  // delegate zombie purge to the kernel
 #endif
@@ -207,14 +219,14 @@ static void engine_spawn(const Worker *w, Engine *e,
         DIE_IF(w->id, chdir(cwd) < 0);
         DIE_IF(w->id, execvp(run, argv) < 0);
     } else {
-        assert(e->pid > 0);
+        assert(this->pid > 0);
 
         // in the parent process
         DIE_IF(w->id, close(into[0]) < 0);
         DIE_IF(w->id, close(outof[1]) < 0);
 
-        DIE_IF(w->id, !(e->in = fdopen(outof[0], "r")));
-        DIE_IF(w->id, !(e->out = fdopen(into[1], "w")));
+        DIE_IF(w->id, !(this->in = fdopen(outof[0], "r")));
+        DIE_IF(w->id, !(this->out = fdopen(into[1], "w")));
     }
 #endif
 }
@@ -247,13 +259,13 @@ static void engine_parse_cmd(const char *cmd, str_t *cwd, str_t *run, str_t **ar
         vec_push(*args, str_init_from(token), str_t);
 }
 
-void Engine::engine_init(Worker *w, const char *cmd, const char *engname, bool debug, str_t *outmsg)
+void Engine::init(const char *cmd, const char *engine_name, int64_t engine_tolerance, str_t *outmsg)
 {
     if (!*cmd)
         DIE("[%d] missing command to start engine.\n", w->id);
 
-    this->name = str_init_from_c(engname);
-    this->isDebug = debug;
+    str_cpy_c(&this->name, engine_name);
+    this->tolerance = engine_tolerance;
     this->messages = outmsg;
 
     // Parse cmd into (cwd, run, args): we want to execute run from cwd with args.
@@ -270,30 +282,29 @@ void Engine::engine_init(Worker *w, const char *cmd, const char *engname, bool d
     }
 
     // Spawn child process and plug pipes
-    engine_spawn(w, this, cwd.buf, run.buf, argv, w->log != NULL);
+    spawn(cwd.buf, run.buf, argv, w->log != NULL);
 
     vec_destroy_rec(args, str_destroy);
     free(argv);
 
     // parse engine ABOUT infomation
-    engine_about(w, cmd);
+    parse_about(cmd);
 }
 
-void Engine::engine_destroy(Worker *w)
+void Engine::destroy()
 {
-    // Engine was not instanciated with engine_init()
-    if (!pid) {
+    // Engine was not instanciated with init()
+    if (!pid)
         return;
-    }
 
     // Order the engine to quit, and grant (tolerance) deadline for obeying
     w->deadline_set(name.buf, system_msec() + tolerance, "exit");
-    engine_writeln(w, "END");
+    writeln("END");
 
 #ifdef __MINGW32__
     // On windows, wait for (tolerance-200) milliseconds, then force 
     // terminate child process if it fails to exit in time
-    int result = WaitForSingleObject(hProcess, std::max<int64_t>(tolerance - 200, 0));
+    DWORD result = WaitForSingleObject(hProcess, std::max<int64_t>(tolerance - 200, 0));
     DIE_IF(w->id, result == WAIT_FAILED);
     if (result == WAIT_TIMEOUT)
         DIE_IF(w->id, !TerminateProcess(hProcess, 0));
@@ -304,13 +315,15 @@ void Engine::engine_destroy(Worker *w)
 #endif
 
     w->deadline_clear();
-
-    str_destroy(&name);
+    
     if (in)  DIE_IF(w->id, fclose(in) < 0);
     if (out) DIE_IF(w->id, fclose(out) < 0);
+
+    // Reset pid to zero
+    pid = 0;
 }
 
-bool Engine::engine_readln(Worker *w, str_t *line)
+bool Engine::readln(str_t *line)
 {
     if (!in) // Check if engine has crashed
         return false;
@@ -330,7 +343,7 @@ bool Engine::engine_readln(Worker *w, str_t *line)
     return true;
 }
 
-void Engine::engine_writeln(const Worker *w, const char *buf)
+void Engine::writeln(const char *buf)
 {
     if (!out) // Check if engine has crashed
         return;
@@ -352,13 +365,13 @@ void Engine::engine_writeln(const Worker *w, const char *buf)
     }
 }
 
-void Engine::engine_wait_for_ok(Worker *w)
+void Engine::wait_for_ok()
 {
     w->deadline_set(name.buf, system_msec() + tolerance, "start");
     scope(str_destroy) str_t line = str_init();
 
     do {
-        if (!engine_readln(w, &line))
+        if (!readln(&line))
             DIE("[%d] engine %s exited before answering START\n", w->id, name.buf);
 
         if (const char *tail = str_prefix(line.buf, "ERROR")) // an ERROR
@@ -368,12 +381,11 @@ void Engine::engine_wait_for_ok(Worker *w)
     w->deadline_clear();
 }
 
-bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, str_t *best,
-    str_t *pv, Info *info, int moveply)
+bool Engine::bestmove(int64_t *timeLeft, int64_t maxTurnTime, str_t *best, 
+    Info *info, int moveply)
 {
     int result = false;
     scope(str_destroy) str_t line = str_init(), token = str_init();
-    str_clear(pv);
 
     const int64_t start = system_msec();
     const int64_t matchTimeLimit = start + *timeLeft;
@@ -389,7 +401,7 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
     int64_t moveOverhead = std::min<int64_t>(tolerance / 2, 1000);
 
     while ((turnTimeLeft + moveOverhead) >= 0 && !result) {
-        if (!engine_readln(w, &line))
+        if (!readln(&line))
             goto Exit;
 
         const int64_t now = system_msec();
@@ -398,16 +410,16 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
         turnTimeLeft = turnTimeLimit - now;
 
         if (this->isDebug) {
-            engine_process_message_ifneeded(line.buf);
+            process_message_ifneeded(line.buf);
         }
 
         if (const char *tail = str_prefix(line.buf, "MESSAGE")) {
             // record engine messages
             if (messages)
                 str_cat_fmt(messages, "%i) %S: %s\n", moveply, name, tail + 1);
-
+            
             // parse and store thing infomation to info
-            engine_parse_thinking_messages(line.buf, info);
+            parse_thinking_messages(line.buf, info);
         } else if (Position::is_valid_move_gomostr(line.buf)) {
             str_cpy(best, line);
             result = true;
@@ -417,17 +429,17 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
     // Time out. Send "stop" and give the opportunity to the engine to respond with bestmove (still
     // under deadline protection).
     if (!result) {
-        engine_writeln(w, "YXSTOP");
+        writeln("YXSTOP");
 
         // For turn timeout, explicitly mark time left as negetive
         *timeLeft = std::min(*timeLeft, INT64_MIN);
 
         do {
-            if (!engine_readln(w, &line))
+            if (!readln(&line))
                 goto Exit;
 
             if (this->isDebug)
-                engine_process_message_ifneeded(line.buf);
+                process_message_ifneeded(line.buf);
 
             if (const char *tail = str_prefix(line.buf, "MESSAGE")) {
                 // record engine messages
@@ -435,7 +447,7 @@ bool Engine::engine_bestmove(Worker *w, int64_t *timeLeft, int64_t maxTurnTime, 
                     str_cat_fmt(messages, "%i) %S: %s\n", moveply, name, tail + 1);
 
                 // parse and store thing infomation to info
-                engine_parse_thinking_messages(line.buf, info);
+                parse_thinking_messages(line.buf, info);
             }
         } while (result = Position::is_valid_move_gomostr(line.buf), !result);
     }
@@ -445,7 +457,11 @@ Exit:
     return result;
 }
 
-static void parse_and_display_engine_about(Worker *w, str_t &line, str_t* engine_name) {
+bool Engine::is_crashed() const {
+    return !in || !out;
+}
+
+static void parse_and_display_engine_about(const Worker *w, str_t &line, str_t* engine_name) {
     int flag = 0;
     std::vector<std::string> tokens;
     std::stringstream ss;
@@ -504,12 +520,12 @@ static void parse_and_display_engine_about(Worker *w, str_t &line, str_t* engine
 }
 
 // process engine ABOUT command
-void Engine::engine_about(Worker *w, const char* fallbackName) {
+void Engine::parse_about(const char* fallbackName) {
     w->deadline_set(*name.buf ? name.buf : fallbackName, system_msec() + tolerance, "about");
-    engine_writeln(w, "ABOUT");
+    writeln("ABOUT");
     scope(str_destroy) str_t line = str_init();
 
-    if (!engine_readln(w, &line))
+    if (!readln(&line))
         DIE("[%d] engine %s exited before answering ABOUT\n", w->id, name.buf);
 
     w->deadline_clear();
@@ -523,37 +539,26 @@ void Engine::engine_about(Worker *w, const char* fallbackName) {
 }
 
 // process MESSAGE, UNKNOWN, ERROR, DEBUG messages
-void Engine::engine_process_message_ifneeded(const char *line)
+void Engine::process_message_ifneeded(const char *line)
 {
     // Isolate the first token being the command to run.
-    const char *tail = NULL;
+    const char *tail = nullptr;
 
-    tail = str_prefix(line, "MESSAGE");
-    if (tail != NULL) { // a MESSAGE
-        printf("engine %s output message:%s\n", this->name.buf, tail);
-        return;
+    if ((tail = str_prefix(line, "MESSAGE"))) {
+        printf("engine %s output message:%s\n", name.buf, tail);
     }
-
-    tail = str_prefix(line, "UNKNOWN");
-    if (tail != NULL) { // a UNKNOWN
-        printf("engine %s output unknown:%s\n", this->name.buf, tail);
-        return;
+    else if ((tail = str_prefix(line, "UNKNOWN"))) {
+        printf("engine %s output unknown:%s\n", name.buf, tail);
     }
-
-    tail = str_prefix(line, "DEBUG");
-    if (tail != NULL) { // a DEBUG
-        printf("engine %s output debug:%s\n", this->name.buf, tail);
-        return;
+    else if ((tail = str_prefix(line, "DEBUG"))) {
+        printf("engine %s output debug:%s\n", name.buf, tail);
     }
-
-    tail = str_prefix(line, "ERROR");
-    if (tail != NULL) { // an ERROR
-        printf("engine %s output error:%s\n", this->name.buf, tail);
-        return;
+    else if ((tail = str_prefix(line, "ERROR"))) {
+        printf("engine %s output error:%s\n", name.buf, tail);
     }
 }
 
-void Engine::engine_parse_thinking_messages([[maybe_unused]] const char *line, Info *info)
+void Engine::parse_thinking_messages([[maybe_unused]] const char *line, Info *info)
 {
     // Set default value
     info->score = 0;

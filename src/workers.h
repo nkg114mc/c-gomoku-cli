@@ -44,10 +44,10 @@ public:
         bool called;
     };
 
+    const int id;  // starts at 1 (0 is for main thread)
     Deadline_t deadline;
-    FILE *log;
     uint64_t seed;  // seed for prng()
-    int id;  // starts at 1 (0 is for main thread)
+    FILE *log;
 
     Worker(int id, const char *logName);
     ~Worker();
