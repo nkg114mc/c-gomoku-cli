@@ -1,29 +1,31 @@
-/* 
+/*
  *  c-gomoku-cli, a command line interface for Gomocup engines. Copyright 2021 Chao Ma.
  *  c-gomoku-cli is derived from c-chess-cli, originally authored by lucasart 2020.
- *  
- *  c-gomoku-cli is free software: you can redistribute it and/or modify it under the terms of the GNU
- *  General Public License as published by the Free Software Foundation, either version 3 of the
- *  License, or (at your option) any later version.
- *  
- *  c-gomoku-cli is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- *  even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- *  General Public License for more details.
- *  
- *  You should have received a copy of the GNU General Public License along with this program. If
- *  not, see <http://www.gnu.org/licenses/>.
+ *
+ *  c-gomoku-cli is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU General Public License as published by the Free Software Foundation,
+ * either version 3 of the License, or (at your option) any later version.
+ *
+ *  c-gomoku-cli is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ * PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along with this
+ * program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <sstream>
-#include <string>
-#include <assert.h>
 #include "openings.h"
+
 #include "util.h"
 #include "vec.h"
 
+#include <assert.h>
+#include <sstream>
+#include <string>
+
 Openings::Openings(const char *fileName, bool random, uint64_t srand) : file(nullptr)
 {
-    index = (long*) vec_init(size_t);
+    index = (long *)vec_init(size_t);
 
     if (*fileName) {
         DIE_IF(0, !(file = fopen(fileName, FOPEN_READ_MODE)));
@@ -40,17 +42,18 @@ Openings::Openings(const char *fileName, bool random, uint64_t srand) : file(nul
         vec_pop(index);  // EOF offset must be removed
 
         if (random) {
-            // Shuffle o.index[], which will be read sequentially from the beginning. This allows
-            // consistent treatment of random and !random, and guarantees no repetition N-cycles in
-            // the random case, rather than sqrt(N) (birthday paradox) if random seek each time.
-            const size_t n = vec_size(index);
-            uint64_t seed = srand ? srand : (uint64_t)system_msec();
+            // Shuffle o.index[], which will be read sequentially from the beginning. This
+            // allows consistent treatment of random and !random, and guarantees no
+            // repetition N-cycles in the random case, rather than sqrt(N) (birthday
+            // paradox) if random seek each time.
+            const size_t n    = vec_size(index);
+            uint64_t     seed = srand ? srand : (uint64_t)system_msec();
 
             for (size_t i = n - 1; i > 0; i--) {
-                const size_t j = prng(&seed) % (i + 1);
-                long tmp = index[i];
-                index[i] = index[j];
-                index[j] = tmp;
+                const size_t j   = prng(&seed) % (i + 1);
+                long         tmp = index[i];
+                index[i]         = index[j];
+                index[j]         = tmp;
             }
         }
 

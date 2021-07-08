@@ -1,26 +1,28 @@
-/* 
+/*
  *  c-gomoku-cli, a command line interface for Gomocup engines. Copyright 2021 Chao Ma.
  *  c-gomoku-cli is derived from c-chess-cli, originally authored by lucasart 2020.
- *  
- *  c-gomoku-cli is free software: you can redistribute it and/or modify it under the terms of the GNU
- *  General Public License as published by the Free Software Foundation, either version 3 of the
- *  License, or (at your option) any later version.
- *  
- *  c-gomoku-cli is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- *  even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- *  General Public License for more details.
- *  
- *  You should have received a copy of the GNU General Public License along with this program. If
- *  not, see <http://www.gnu.org/licenses/>.
+ *
+ *  c-gomoku-cli is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU General Public License as published by the Free Software Foundation,
+ * either version 3 of the License, or (at your option) any later version.
+ *
+ *  c-gomoku-cli is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ * PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along with this
+ * program. If not, see <http://www.gnu.org/licenses/>.
  */
+
+#include "str.h"
+
+#include "util.h"
 
 #include <assert.h>
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#include "str.h"
-#include "util.h"
 
 static size_t str_round_up(size_t n)
 // Round to the next power of 2, at least the size of 2 machine words
@@ -29,9 +31,8 @@ static size_t str_round_up(size_t n)
         return 2 * sizeof(size_t);
     else if (n < 4096)
         // growth rate 2
-        return n & (n - 1)
-            ? 1ULL << (64 - __builtin_clzll(n))  // next power of 2
-            : n;  // already a power of 2
+        return n & (n - 1) ? 1ULL << (64 - __builtin_clzll(n))  // next power of 2
+                           : n;                                 // already a power of 2
     else {
         // growth rate 1.5
         size_t p = 4096;
@@ -44,9 +45,11 @@ static size_t str_round_up(size_t n)
 }
 
 static void str_resize(str_t *s, size_t len)
-// This function is not exposed to the API, because it does not respect the str_ok() criteria:
+// This function is not exposed to the API, because it does not respect the str_ok()
+// criteria:
 // - entry: may be called with (str_t){0} or a valid string.
-// - exit: will not satisfy the condition !memchr(s->buf, 0, s->len), in the case of extending len
+// - exit: will not satisfy the condition !memchr(s->buf, 0, s->len), in the case of
+// extending len
 //   with early '\0' between buf[0] and buf[len-1].
 {
     assert((!s->alloc && !s->len && !s->buf) || str_ok(*s));
@@ -54,10 +57,10 @@ static void str_resize(str_t *s, size_t len)
     // Implement lazy realloc strategy
     if (s->alloc < str_round_up(len + 1)) {
         s->alloc = str_round_up(len + 1);
-        s->buf = (char*)realloc(s->buf, s->alloc);
+        s->buf   = (char *)realloc(s->buf, s->alloc);
     }
 
-    s->len = len;
+    s->len      = len;
     s->buf[len] = '\0';
 
     assert(s->alloc > s->len && s->buf && s->buf[s->len] == '\0');
@@ -82,10 +85,10 @@ bool str_eq(const str_t s1, const str_t s2)
 str_t str_ref(const char *src)
 {
     const size_t len = strlen(src);
-    str_t s;
-    s.len = len;
+    str_t        s;
+    s.len   = len;
     s.alloc = len + 1;
-    s.buf = (char *)src;
+    s.buf   = (char *)src;
     return s;
 }
 
@@ -176,7 +179,7 @@ static void do_str_cat_fmt(str_t *dest, const char *fmt, va_list args)
     size_t bytesLeft = strlen(fmt);
 
     while (bytesLeft) {
-        const char *pct = (char*)memchr(fmt, '%', bytesLeft);
+        const char *pct = (char *)memchr(fmt, '%', bytesLeft);
 
         if (!pct) {
             // '%' not found: append the rest of the format string and we're done
@@ -195,18 +198,21 @@ static void do_str_cat_fmt(str_t *dest, const char *fmt, va_list args)
         assert(strlen(fmt) == bytesLeft);
 
         assert(sizeof(intmax_t) <= 8);
-        char buf[24];  // enough to fit a intmax_t with sign prefix '-' and '\0' terminator
+        char
+            buf[24];  // enough to fit a intmax_t with sign prefix '-' and '\0' terminator
 
         if (pct[1] == 's')
             str_cat_c(dest, va_arg(args, const char *));  // C-string
         else if (pct[1] == 'S')
-            str_cat(dest, va_arg(args, str_t));  // string
+            str_cat(dest, va_arg(args, str_t));     // string
         else if (pct[1] == 'i' || pct[1] == 'I') {  // int or intmax_t
             const intmax_t i = pct[1] == 'i' ? va_arg(args, int) : va_arg(args, intmax_t);
-            char *s = do_fmt_u((uintmax_t)imaxabs(i), &buf[sizeof(buf) - 1]);
-            if (i < 0) *--s = '-';
+            char *         s = do_fmt_u((uintmax_t)imaxabs(i), &buf[sizeof(buf) - 1]);
+            if (i < 0)
+                *--s = '-';
             str_cat_c(dest, s);
-        } else if (pct[1] == 'u')  // unsigned int
+        }
+        else if (pct[1] == 'u')  // unsigned int
             str_cat_c(dest, do_fmt_u(va_arg(args, unsigned), &buf[sizeof(buf) - 1]));
         else if (pct[1] == 'U')  // uintmax_t
             str_cat_c(dest, do_fmt_u(va_arg(args, uintmax_t), &buf[sizeof(buf) - 1]));
@@ -257,18 +263,19 @@ const char *str_tok(const char *s, str_t *token, const char *delim)
     return token->len ? s : NULL;
 }
 
-// Read next character using escape character. Result in *out. Retuns tail pointer, and sets
-// escaped=true if escape character parsed.
+// Read next character using escape character. Result in *out. Retuns tail pointer, and
+// sets escaped=true if escape character parsed.
 static const char *str_getc_esc(const char *s, char *out, bool *escaped, char esc)
 {
     if (*s != esc) {
         *escaped = false;
-        *out = *s;
+        *out     = *s;
         return s + 1;
-    } else {
+    }
+    else {
         assert(*s && *s == esc);
         *escaped = true;
-        *out = *(s + 1);
+        *out     = *(s + 1);
         return s + 2;
     }
 }
@@ -285,8 +292,8 @@ const char *str_tok_esc(const char *s, str_t *token, char delim, char esc)
     str_resize(token, 0);
 
     const char *tail = s;
-    char c;
-    bool escaped, accumulate = false;
+    char        c;
+    bool        escaped, accumulate = false;
 
     while (*tail && (tail = str_getc_esc(tail, &c, &escaped, esc))) {
         if (!accumulate && (c != delim || escaped))

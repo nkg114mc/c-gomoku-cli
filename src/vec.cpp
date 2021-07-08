@@ -1,17 +1,17 @@
-/* 
+/*
  *  c-gomoku-cli, a command line interface for Gomocup engines. Copyright 2021 Chao Ma.
  *  c-gomoku-cli is derived from c-chess-cli, originally authored by lucasart 2020.
- *  
- *  c-gomoku-cli is free software: you can redistribute it and/or modify it under the terms of the GNU
- *  General Public License as published by the Free Software Foundation, either version 3 of the
- *  License, or (at your option) any later version.
- *  
- *  c-gomoku-cli is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- *  even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- *  General Public License for more details.
- *  
- *  You should have received a copy of the GNU General Public License along with this program. If
- *  not, see <http://www.gnu.org/licenses/>.
+ *
+ *  c-gomoku-cli is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU General Public License as published by the Free Software Foundation,
+ * either version 3 of the License, or (at your option) any later version.
+ *
+ *  c-gomoku-cli is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ * PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along with this
+ * program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "vec.h"
@@ -19,19 +19,19 @@
 vec_t *vec_ptr(void *v)
 {
     assert(v);
-    return (vec_t *)((char *)(v) - offsetof(vec_t, buf));
+    return (vec_t *)((char *)(v)-offsetof(vec_t, buf));
 }
 
 const vec_t *vec_cptr(const void *v)
 {
-    return (const vec_t *)((const char *)(v) - offsetof(vec_t, buf));
+    return (const vec_t *)((const char *)(v)-offsetof(vec_t, buf));
 }
 
 void *vec_do_init(size_t capacity, size_t esize)
 {
-    vec_t *p = (vec_t*) malloc(sizeof(vec_t) + capacity * esize);
+    vec_t *p    = (vec_t *)malloc(sizeof(vec_t) + capacity * esize);
     p->capacity = capacity;
-    p->size = 0;
+    p->size     = 0;
     return (void *)p->buf;
 }
 
@@ -55,11 +55,13 @@ void *vec_do_grow(void *v, size_t esize, size_t additional)
             // First realloc must be at least 2 machine words
             n = (2 * sizeof(size_t) + esize) / esize;
             assert(n > 0);
-        } else if (n * esize + sizeof(vec_t) < 4096) {
+        }
+        else if (n * esize + sizeof(vec_t) < 4096) {
             // As long as we occupy less than a memory page, double the size
             assert(n > 0);
             n *= 2;
-        } else {
+        }
+        else {
             // Otherwise, multiply by 1.5 (rounding up to always increase)
             assert(n > 0);
             n += (n + 1) / 2;
@@ -67,7 +69,7 @@ void *vec_do_grow(void *v, size_t esize, size_t additional)
     }
 
     if (n > p->capacity) {
-        p = (vec_t*) realloc(p, sizeof(vec_t) + esize * n);
+        p           = (vec_t *)realloc(p, sizeof(vec_t) + esize * n);
         p->capacity = n;
     }
 

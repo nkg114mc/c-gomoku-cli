@@ -1,7 +1,9 @@
-#include <cstdlib>
 #include "workers.h"
+
 #include "util.h"
 #include "vec.h"
+
+#include <cstdlib>
 
 Worker::Worker(int i, const char *logName) : id(i + 1), seed(i), log(nullptr)
 {
@@ -19,26 +21,32 @@ Worker::~Worker()
     }
 }
 
-
-void Worker::deadline_set(const char *engineName, int64_t timeLimit, 
-    const char *description, std::function<void()> callback)
+void Worker::deadline_set(const char *          engineName,
+                          int64_t               timeLimit,
+                          const char *          description,
+                          std::function<void()> callback)
 {
     assert(timeLimit > 0);
 
     {
         std::lock_guard lock(deadline.mtx);
 
-        deadline.set = true;
-        deadline.called = false;
-        deadline.engineName = engineName;
+        deadline.set         = true;
+        deadline.called      = false;
+        deadline.engineName  = engineName;
         deadline.description = description;
-        deadline.timeLimit = timeLimit;
-        deadline.callback = callback;
+        deadline.timeLimit   = timeLimit;
+        deadline.callback    = callback;
     }
 
     if (log)
-        DIE_IF(id, fprintf(log, "deadline: %s must respond to [%s] by %" PRId64 "\n", 
-            engineName, description, timeLimit) < 0);
+        DIE_IF(id,
+               fprintf(log,
+                       "deadline: %s must respond to [%s] by %" PRId64 "\n",
+                       engineName,
+                       description,
+                       timeLimit)
+                   < 0);
 }
 
 void Worker::deadline_clear()
@@ -48,8 +56,13 @@ void Worker::deadline_clear()
     deadline.set = false;
 
     if (log)
-        DIE_IF(id, fprintf(log, "deadline: %s responded [%s] before %" PRId64 "\n",
-            deadline.engineName.c_str(), deadline.description.c_str(), deadline.timeLimit) < 0);
+        DIE_IF(id,
+               fprintf(log,
+                       "deadline: %s responded [%s] before %" PRId64 "\n",
+                       deadline.engineName.c_str(),
+                       deadline.description.c_str(),
+                       deadline.timeLimit)
+                   < 0);
 }
 
 void Worker::deadline_callback_once()

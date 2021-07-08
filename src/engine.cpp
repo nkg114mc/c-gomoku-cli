@@ -1,57 +1,57 @@
-/* 
+/*
  *  c-gomoku-cli, a command line interface for Gomocup engines. Copyright 2021 Chao Ma.
  *  c-gomoku-cli is derived from c-chess-cli, originally authored by lucasart 2020.
- *  
- *  c-gomoku-cli is free software: you can redistribute it and/or modify it under the terms of the GNU
- *  General Public License as published by the Free Software Foundation, either version 3 of the
- *  License, or (at your option) any later version.
- *  
- *  c-gomoku-cli is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- *  even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- *  General Public License for more details.
- *  
- *  You should have received a copy of the GNU General Public License along with this program. If
- *  not, see <http://www.gnu.org/licenses/>.
+ *
+ *  c-gomoku-cli is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU General Public License as published by the Free Software Foundation,
+ * either version 3 of the License, or (at your option) any later version.
+ *
+ *  c-gomoku-cli is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ * PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along with this
+ * program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #if defined(__MINGW32__)
-    #include <io.h>
     #include <fcntl.h>
-    #include <windows.h> 
+    #include <io.h>
+    #include <windows.h>
 #elif defined(__linux__)
     #define _GNU_SOURCE
-    #include <unistd.h>
     #include <fcntl.h>
     #include <sys/prctl.h>
     #include <sys/wait.h>
-#else
     #include <unistd.h>
+#else
     #include <sys/wait.h>
+    #include <unistd.h>
 #endif
 
-#include <iostream>
-#include <sstream>
-#include <filesystem>
-#include <mutex>
-#include <assert.h>
-#include <limits.h>
-#include <signal.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-
 #include "engine.h"
+#include "position.h"
 #include "util.h"
 #include "vec.h"
-#include "position.h"
 #include "workers.h"
 
-Engine::Engine(Worker *worker, bool debug) : w(worker) , isDebug(debug), pid(0)
+#include <assert.h>
+#include <filesystem>
+#include <iostream>
+#include <limits.h>
+#include <mutex>
+#include <signal.h>
+#include <sstream>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+Engine::Engine(Worker *worker, bool debug) : w(worker), isDebug(debug), pid(0)
 {
     name = str_init();
 }
 
-Engine::~Engine() 
+Engine::~Engine()
 {
     if (pid)
         destroy();
@@ -69,15 +69,18 @@ void Engine::spawn(const char *cwd, const char *run, char **argv, bool readStdEr
         HANDLE hJob = CreateJobObject(NULL, NULL);
         DIE_IF(w->id, !hJob);
 
-        JOBOBJECT_BASIC_LIMIT_INFORMATION jobBasicInfo;
+        JOBOBJECT_BASIC_LIMIT_INFORMATION    jobBasicInfo;
         JOBOBJECT_EXTENDED_LIMIT_INFORMATION jobExtendedInfo;
         ZeroMemory(&jobBasicInfo, sizeof(JOBOBJECT_BASIC_LIMIT_INFORMATION));
         ZeroMemory(&jobExtendedInfo, sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
 
-        jobBasicInfo.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        jobBasicInfo.LimitFlags               = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
         jobExtendedInfo.BasicLimitInformation = jobBasicInfo;
-        DIE_IF(w->id, !SetInformationJobObject(hJob, JobObjectExtendedLimitInformation, 
-            &jobExtendedInfo, sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION)));
+        DIE_IF(w->id,
+               !SetInformationJobObject(hJob,
+                                        JobObjectExtendedLimitInformation,
+                                        &jobExtendedInfo,
+                                        sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION)));
 
         DIE_IF(w->id, !AssignProcessToJobObject(hJob, GetCurrentProcess()));
         return hJob;
@@ -85,25 +88,25 @@ void Engine::spawn(const char *cwd, const char *run, char **argv, bool readStdEr
 
     // Setup structs needed to create process
     SECURITY_ATTRIBUTES saAttr;
-    saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
-    saAttr.bInheritHandle = TRUE;
+    saAttr.nLength              = sizeof(SECURITY_ATTRIBUTES);
+    saAttr.bInheritHandle       = TRUE;
     saAttr.lpSecurityDescriptor = NULL;
-    PROCESS_INFORMATION piProcInfo; 
-    STARTUPINFO siStartInfo;
+    PROCESS_INFORMATION piProcInfo;
+    STARTUPINFO         siStartInfo;
     ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
     ZeroMemory(&siStartInfo, sizeof(STARTUPINFO));
-    siStartInfo.cb = sizeof(STARTUPINFO); 
+    siStartInfo.cb = sizeof(STARTUPINFO);
     siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
 
     // Construct full commandline using run and argv
     char fullrun[MAX_PATH];
     char fullcmd[32768];
     strcpy_s(fullrun, cwd);
-    strcat_s(fullrun, run + 1); // we need an path relative to the cli
+    strcat_s(fullrun, run + 1);  // we need an path relative to the cli
 
     // Use an absolute path for engine argv[0]
-    strcpy_s(fullcmd, "\""); // path is quoted to deal with directory name with spaces
-    strcat_s(fullcmd, std::filesystem::absolute(fullrun).string().c_str()); 
+    strcpy_s(fullcmd, "\"");  // path is quoted to deal with directory name with spaces
+    strcat_s(fullcmd, std::filesystem::absolute(fullrun).string().c_str());
     strcat_s(fullcmd, "\"");
     for (size_t i = 1; argv[i]; i++) {  // argv[0] == run
         strcat_s(fullcmd, " ");
@@ -125,31 +128,37 @@ void Engine::spawn(const char *cwd, const char *run, char **argv, bool readStdEr
         // Create a pipe for child process's STDIN
         DIE_IF(w->id, !CreatePipe(&p_stdin[0], &p_stdin[1], &saAttr, 0));
         DIE_IF(w->id, !SetHandleInformation(p_stdin[1], HANDLE_FLAG_INHERIT, 0));
-        
+
         // Create the child process
         siStartInfo.hStdOutput = p_stdout[1];
-        siStartInfo.hStdInput = p_stdin[0];
+        siStartInfo.hStdInput  = p_stdin[0];
         if (readStdErr) {
             HANDLE p_stderr;
-            DIE_IF(w->id, !DuplicateHandle(GetCurrentProcess(), p_stdout[1],
-                GetCurrentProcess(), &p_stderr, 0, TRUE, DUPLICATE_SAME_ACCESS));
+            DIE_IF(w->id,
+                   !DuplicateHandle(GetCurrentProcess(),
+                                    p_stdout[1],
+                                    GetCurrentProcess(),
+                                    &p_stderr,
+                                    0,
+                                    TRUE,
+                                    DUPLICATE_SAME_ACCESS));
             siStartInfo.hStdError = p_stderr;
         }
 
         const int flag = CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS;
         // FIXME: fullrun, fullcmd, cwd conversion to LPCWSTR
-        DIE_IF(w->id, !CreateProcess(
-            fullrun,        // application name
-            fullcmd,        // command line (non-const)
-            NULL,           // process security attributes
-            NULL,           // primary thread security attributes
-            TRUE,           // handles are inherited
-            flag,           // creation flags
-            NULL,           // use parent's environment
-            cwd,            // child process's current directory
-            &siStartInfo,   // STARTUPINFO pointer
-            &piProcInfo     // receives PROCESS_INFORMATION
-        ));
+        DIE_IF(w->id,
+               !CreateProcess(fullrun,       // application name
+                              fullcmd,       // command line (non-const)
+                              NULL,          // process security attributes
+                              NULL,          // primary thread security attributes
+                              TRUE,          // handles are inherited
+                              flag,          // creation flags
+                              NULL,          // use parent's environment
+                              cwd,           // child process's current directory
+                              &siStartInfo,  // STARTUPINFO pointer
+                              &piProcInfo    // receives PROCESS_INFORMATION
+                              ));
 
         // Close handles to the stdin and stdout pipes no longer needed
         DIE_IF(w->id, !CloseHandle(p_stdin[0]));
@@ -157,13 +166,13 @@ void Engine::spawn(const char *cwd, const char *run, char **argv, bool readStdEr
     }
 
     // Keep the handle to the child process
-    this->pid = piProcInfo.dwProcessId;
+    this->pid      = piProcInfo.dwProcessId;
     this->hProcess = piProcInfo.hProcess;
     // Close the handle to the child's primary thread
     DIE_IF(w->id, !CloseHandle(piProcInfo.hThread));
 
     // Reopen stdin and stdout pipes using C style FILE
-    int stdin_fd = _open_osfhandle((intptr_t)p_stdin[1], _O_RDONLY | _O_TEXT);
+    int stdin_fd  = _open_osfhandle((intptr_t)p_stdin[1], _O_RDONLY | _O_TEXT);
     int stdout_fd = _open_osfhandle((intptr_t)p_stdout[0], _O_RDONLY | _O_TEXT);
     DIE_IF(w->id, stdin_fd == -1);
     DIE_IF(w->id, stdout_fd == -1);
@@ -180,45 +189,47 @@ void Engine::spawn(const char *cwd, const char *run, char **argv, bool readStdEr
     // 'into' and 'outof' are pipes, each with 2 ends: read=0, write=1
     int outof[2] = {0}, into[2] = {0};
 
-#ifdef __linux__
+    #ifdef __linux__
     DIE_IF(w->id, pipe2(outof, O_CLOEXEC) < 0);
     DIE_IF(w->id, pipe2(into, O_CLOEXEC) < 0);
-#else
+    #else
     DIE_IF(w->id, pipe(outof) < 0);
     DIE_IF(w->id, pipe(into) < 0);
-#endif
+    #endif
 
     DIE_IF(w->id, (this->pid = fork()) < 0);
 
     if (this->pid == 0) {
-#ifdef __linux__
+    #ifdef __linux__
         prctl(PR_SET_PDEATHSIG, SIGHUP);  // delegate zombie purge to the kernel
-#endif
+    #endif
         // Plug stdin and stdout
         DIE_IF(w->id, dup2(into[0], STDIN_FILENO) < 0);
         DIE_IF(w->id, dup2(outof[1], STDOUT_FILENO) < 0);
 
         // For stderr we have 2 choices:
-        // - readStdErr=true: dump it into stdout, like doing '2>&1' in bash. This is useful, if we
-        // want to see error messages from engines in their respective log file (notably assert()
-        // writes to stderr). Of course, such error messages should not be UCI commands, otherwise we
-        // will be fooled into parsing them as such.
-        // - readStdErr=false: do nothing, which means stderr is inherited from the parent process.
-        // Typcically, this means all engines write their error messages to the terminal (unless
-        // redirected otherwise).
+        // - readStdErr=true: dump it into stdout, like doing '2>&1' in bash. This is
+        // useful, if we want to see error messages from engines in their respective log
+        // file (notably assert() writes to stderr). Of course, such error messages should
+        // not be UCI commands, otherwise we will be fooled into parsing them as such.
+        // - readStdErr=false: do nothing, which means stderr is inherited from the parent
+        // process. Typcically, this means all engines write their error messages to the
+        // terminal (unless redirected otherwise).
         if (readStdErr)
             DIE_IF(w->id, dup2(outof[1], STDERR_FILENO) < 0);
 
-#ifndef __linux__
+    #ifndef __linux__
         // Ugly (and slow) workaround for non-Linux POSIX systems that lack the ability to
         // atomically set O_CLOEXEC when creating pipes.
-        for (int fd = 3; fd < sysconf(FOPEN_MAX); close(fd++));
-#endif
+        for (int fd = 3; fd < sysconf(FOPEN_MAX); close(fd++))
+            ;
+    #endif
 
         // Set cwd as current directory, and execute run with argv[]
         DIE_IF(w->id, chdir(cwd) < 0);
         DIE_IF(w->id, execvp(run, argv) < 0);
-    } else {
+    }
+    else {
         assert(this->pid > 0);
 
         // in the parent process
@@ -235,14 +246,16 @@ static void engine_parse_cmd(const char *cmd, str_t *cwd, str_t *run, str_t **ar
 {
     // Isolate the first token being the command to run.
     scope(str_destroy) str_t token = str_init();
-    const char *tail = cmd;
-    tail = str_tok_esc(tail, &token, ' ', '\\');
+    const char *             tail  = cmd;
+    tail                           = str_tok_esc(tail, &token, ' ', '\\');
 
     // Split token into (cwd, run). Possible cases:
     // (a) unqualified path, like "demolito" (which evecvp() will search in PATH)
-    // (b) qualified path (absolute starting with "/", or relative starting with "./" or "../")
-    // For (b), we want to separate into executable and directory, so instead of running
-    // "../Engines/demolito" from the cwd, we execute run="./demolito" from cwd="../Engines"
+    // (b) qualified path (absolute starting with "/", or relative starting with "./" or
+    // "../") For (b), we want to separate into executable and directory, so instead of
+    // running
+    // "../Engines/demolito" from the cwd, we execute run="./demolito" from
+    // cwd="../Engines"
     str_cpy_c(cwd, "./");
     str_cpy(run, token);
     const char *lastSlash = strrchr(token.buf, '/');
@@ -259,23 +272,27 @@ static void engine_parse_cmd(const char *cmd, str_t *cwd, str_t *run, str_t **ar
         vec_push(*args, str_init_from(token), str_t);
 }
 
-void Engine::init(const char *cmd, const char *engine_name, int64_t engine_tolerance, str_t *outmsg)
+void Engine::init(const char *cmd,
+                  const char *engine_name,
+                  int64_t     engine_tolerance,
+                  str_t *     outmsg)
 {
     if (!*cmd)
         DIE("[%d] missing command to start engine.\n", w->id);
 
     str_cpy_c(&this->name, engine_name);
     this->tolerance = engine_tolerance;
-    this->messages = outmsg;
+    this->messages  = outmsg;
 
     // Parse cmd into (cwd, run, args): we want to execute run from cwd with args.
     scope(str_destroy) str_t cwd = str_init(), run = str_init();
-    str_t *args = vec_init(str_t);
+    str_t *                  args = vec_init(str_t);
     engine_parse_cmd(cmd, &cwd, &run, &args);
 
-    // execvp() needs NULL terminated char **, not vec of str_t. Prepare a char **, whose elements
-    // point to the C-string buffers of the elements of args, with the required NULL at the end.
-    char **argv = (char**)calloc(vec_size(args) + 1, sizeof(char *));
+    // execvp() needs NULL terminated char **, not vec of str_t. Prepare a char **, whose
+    // elements point to the C-string buffers of the elements of args, with the required
+    // NULL at the end.
+    char **argv = (char **)calloc(vec_size(args) + 1, sizeof(char *));
 
     for (size_t i = 0; i < vec_size(args); i++) {
         argv[i] = args[i].buf;
@@ -302,7 +319,7 @@ void Engine::destroy()
     writeln("END");
 
 #ifdef __MINGW32__
-    // On windows, wait for (tolerance-200) milliseconds, then force 
+    // On windows, wait for (tolerance-200) milliseconds, then force
     // terminate child process if it fails to exit in time
     DWORD result = WaitForSingleObject(hProcess, std::max<int64_t>(tolerance - 200, 0));
     DIE_IF(w->id, result == WAIT_FAILED);
@@ -315,9 +332,11 @@ void Engine::destroy()
 #endif
 
     w->deadline_clear();
-    
-    if (in)  DIE_IF(w->id, fclose(in) < 0);
-    if (out) DIE_IF(w->id, fclose(out) < 0);
+
+    if (in)
+        DIE_IF(w->id, fclose(in) < 0);
+    if (out)
+        DIE_IF(w->id, fclose(out) < 0);
 
     // Reset pid to zero
     pid = 0;
@@ -325,7 +344,7 @@ void Engine::destroy()
 
 bool Engine::readln(str_t *line)
 {
-    if (!in) // Check if engine has crashed
+    if (!in)  // Check if engine has crashed
         return false;
 
     if (!str_getline(line, in)) {
@@ -345,7 +364,7 @@ bool Engine::readln(str_t *line)
 
 void Engine::writeln(const char *buf)
 {
-    if (!out) // Check if engine has crashed
+    if (!out)  // Check if engine has crashed
         return;
 
     DIE_IF(w->id, fputs(buf, out) < 0);
@@ -374,29 +393,32 @@ void Engine::wait_for_ok()
         if (!readln(&line))
             DIE("[%d] engine %s exited before answering START\n", w->id, name.buf);
 
-        if (const char *tail = str_prefix(line.buf, "ERROR")) // an ERROR
+        if (const char *tail = str_prefix(line.buf, "ERROR"))  // an ERROR
             DIE("[%d] engine %s output error:%s\n", w->id, name.buf, tail);
     } while (strcmp(line.buf, "OK"));
 
     w->deadline_clear();
 }
 
-bool Engine::bestmove(int64_t *timeLeft, int64_t maxTurnTime, str_t *best, 
-    Info *info, int moveply)
+bool Engine::bestmove(int64_t *timeLeft,
+                      int64_t  maxTurnTime,
+                      str_t *  best,
+                      Info *   info,
+                      int      moveply)
 {
-    int result = false;
+    int                      result = false;
     scope(str_destroy) str_t line = str_init(), token = str_init();
 
-    const int64_t start = system_msec();
+    const int64_t start          = system_msec();
     const int64_t matchTimeLimit = start + *timeLeft;
-    int64_t turnTimeLimit = matchTimeLimit;
-    int64_t turnTimeLeft = *timeLeft;
+    int64_t       turnTimeLimit  = matchTimeLimit;
+    int64_t       turnTimeLeft   = *timeLeft;
     if (maxTurnTime > 0) {
         // engine should not think longer than the turn_time_limit
         turnTimeLimit = start + min(*timeLeft, maxTurnTime);
-        turnTimeLeft = min(*timeLeft, maxTurnTime);
+        turnTimeLeft  = min(*timeLeft, maxTurnTime);
     }
-    
+
     w->deadline_set(name.buf, turnTimeLimit + tolerance, "move");
     int64_t moveOverhead = std::min<int64_t>(tolerance / 2, 1000);
 
@@ -405,9 +427,9 @@ bool Engine::bestmove(int64_t *timeLeft, int64_t maxTurnTime, str_t *best,
             goto Exit;
 
         const int64_t now = system_msec();
-        info->time = now - start;
-        *timeLeft = matchTimeLimit - now;
-        turnTimeLeft = turnTimeLimit - now;
+        info->time        = now - start;
+        *timeLeft         = matchTimeLimit - now;
+        turnTimeLeft      = turnTimeLimit - now;
 
         if (this->isDebug) {
             process_message_ifneeded(line.buf);
@@ -417,17 +439,18 @@ bool Engine::bestmove(int64_t *timeLeft, int64_t maxTurnTime, str_t *best,
             // record engine messages
             if (messages)
                 str_cat_fmt(messages, "%i) %S: %s\n", moveply, name, tail + 1);
-            
+
             // parse and store thing infomation to info
             parse_thinking_messages(line.buf, info);
-        } else if (Position::is_valid_move_gomostr(line.buf)) {
+        }
+        else if (Position::is_valid_move_gomostr(line.buf)) {
             str_cpy(best, line);
             result = true;
         }
     }
 
-    // Time out. Send "stop" and give the opportunity to the engine to respond with bestmove (still
-    // under deadline protection).
+    // Time out. Send "stop" and give the opportunity to the engine to respond with
+    // bestmove (still under deadline protection).
     if (!result) {
         writeln("YXSTOP");
 
@@ -457,29 +480,35 @@ Exit:
     return result;
 }
 
-bool Engine::is_crashed() const {
+bool Engine::is_crashed() const
+{
     return !in || !out;
 }
 
-static void parse_and_display_engine_about(const Worker *w, str_t &line, str_t* engine_name) {
-    int flag = 0;
+static void
+parse_and_display_engine_about(const Worker *w, str_t &line, str_t *engine_name)
+{
+    int                      flag = 0;
     std::vector<std::string> tokens;
-    std::stringstream ss;
+    std::stringstream        ss;
     for (size_t i = 0; i < line.len; i++) {
         char ch = line.buf[i];
         if (ch == '\"') {
             flag = (flag + 1) % 2;
-        } else if (ch == ',' || ch == ' ' || ch == '=') {
+        }
+        else if (ch == ',' || ch == ' ' || ch == '=') {
             if (flag > 0) {
                 ss << ch;
-            } else {
+            }
+            else {
                 if (ss.str().length() > 0) {
                     tokens.push_back(ss.str());
                 }
                 ss.clear();
                 ss.str("");
             }
-        } else {
+        }
+        else {
             ss << ch;
         }
     }
@@ -487,8 +516,8 @@ static void parse_and_display_engine_about(const Worker *w, str_t &line, str_t* 
         tokens.push_back(ss.str());
     }
 
-    std::string name = "?";
-    std::string author = "?";
+    std::string name    = "?";
+    std::string author  = "?";
     std::string version = "?";
     std::string country = "?";
     for (size_t i = 0; i < tokens.size(); i++) {
@@ -499,29 +528,38 @@ static void parse_and_display_engine_about(const Worker *w, str_t &line, str_t* 
                 if (!*engine_name->buf)
                     str_cpy_c(engine_name, name.c_str());
             }
-        } else if (tokens[i] == "version") {
+        }
+        else if (tokens[i] == "version") {
             if ((i + 1) < tokens.size()) {
                 version = tokens[i + 1];
             }
-            
-        } else if (tokens[i] == "author") {
+        }
+        else if (tokens[i] == "author") {
             if ((i + 1) < tokens.size()) {
                 author = tokens[i + 1];
             }
-        } else if (tokens[i] == "country") {
+        }
+        else if (tokens[i] == "country") {
             if ((i + 1) < tokens.size()) {
                 country = tokens[i + 1];
             }
         }
     }
 
-    std::printf("[%d] Load engine: %s (version %s) by %s, %s\n", w->id, 
-        name.c_str(), version.c_str(), author.c_str(), country.c_str());
+    std::printf("[%d] Load engine: %s (version %s) by %s, %s\n",
+                w->id,
+                name.c_str(),
+                version.c_str(),
+                author.c_str(),
+                country.c_str());
 }
 
 // process engine ABOUT command
-void Engine::parse_about(const char* fallbackName) {
-    w->deadline_set(*name.buf ? name.buf : fallbackName, system_msec() + tolerance, "about");
+void Engine::parse_about(const char *fallbackName)
+{
+    w->deadline_set(*name.buf ? name.buf : fallbackName,
+                    system_msec() + tolerance,
+                    "about");
     writeln("ABOUT");
     scope(str_destroy) str_t line = str_init();
 
@@ -529,7 +567,7 @@ void Engine::parse_about(const char* fallbackName) {
         DIE("[%d] engine %s exited before answering ABOUT\n", w->id, name.buf);
 
     w->deadline_clear();
-    
+
     // parse about infos
     parse_and_display_engine_about(w, line, &name);
 
