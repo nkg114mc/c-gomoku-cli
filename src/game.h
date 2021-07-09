@@ -19,7 +19,10 @@
 #include "extern/lz4frame.h"
 #include "options.h"
 #include "position.h"
-#include "str.h"
+
+#include <string>
+#include <string_view>
+#include <vector>
 
 enum {
     STATE_NONE,
@@ -49,17 +52,16 @@ struct Sample
 class Game
 {
 public:
-    str_t     names[NB_COLOR];  // names of players, by color
-    Position *pos;              // list of positions (including moves) since game start
-    Info *    info;             // remembered from parsing info lines (for PGN comments)
-    Sample *  samples;          // list of samples when generating training data
-    GameRule  game_rule;        // rule is gomoku or renju, etc
-    int       round, game, ply, state, board_size;
+    std::string           names[NB_COLOR];  // names of players, by color
+    std::vector<Position> pos;   // list of positions (including moves) since game start
+    std::vector<Info>     info;  // remembered from parsing info lines (for PGN comments)
+    std::vector<Sample>   samples;    // list of samples when generating training data
+    GameRule              game_rule;  // rule is gomoku or renju, etc
+    int                   round, game, ply, state, board_size;
 
     Game(int round, int game);
-    ~Game();
 
-    bool load_fen(str_t *fen, int *color, const Options *o, size_t round);
+    bool load_fen(std::string_view fen, int *color, const Options *o, size_t round);
 
     int play(Worker *             w,
              const Options *      o,
@@ -67,23 +69,24 @@ public:
              const EngineOptions *eo[2],
              bool                 reverse);
 
-    void decode_state(str_t *result, str_t *reason, const char *restxt[3]) const;
-    void export_pgn(size_t gameIdx, int verbosity, str_t *out) const;
-    void export_sgf(size_t gameIdx, str_t *out) const;
+    void
+    decode_state(std::string &result, std::string &reason, const char *restxt[3]) const;
+    std::string export_pgn(size_t gameIdx, int verbosity) const;
+    std::string export_sgf(size_t gameIdx) const;
     void
     export_samples(FILE *out, bool bin, LZ4F_compressionContext_t lz4Ctx = nullptr) const;
 
 private:
+    int  game_apply_rules(move_t lastmove);
     void compute_time_left(const EngineOptions *eo, int64_t *timeLeft);
     void send_board_command(const Position *pos, Worker *w, Engine *engine);
     void gomocup_turn_info_command(const EngineOptions *eo,
                                    const int64_t        timeLeft,
-                                   Worker *             w,
                                    Engine *             engine);
     void gomocup_game_info_command(const EngineOptions *eo,
                                    const Options *      option,
-                                   Worker *             w,
                                    Engine *             engine);
+
     void export_samples_csv(FILE *out) const;
     void export_samples_bin(FILE *out, LZ4F_compressionContext_t lz4Ctx) const;
 };

@@ -15,9 +15,10 @@
  */
 
 #pragma once
-#include "str.h"
 
 #include <mutex>
+#include <string>
+#include <vector>
 
 // Result for each pair (e1, e2); e1 < e2. Stores count of game outcomes from e1's point
 // of view.
@@ -40,9 +41,8 @@ class JobQueue
 {
 public:
     JobQueue(int engines, int rounds, int games, bool gauntlet);
-    ~JobQueue();
 
-    bool pop(Job *j, size_t *idx, size_t *count);
+    bool pop(Job &j, size_t &idx, size_t &count);
     void add_result(int pair, int outcome, int count[3]);
     bool done();
     void stop();
@@ -51,10 +51,10 @@ public:
     void print_results(size_t frequency);
 
 public:
-    std::mutex mtx;
-    Job *      jobs;
-    size_t     idx;        // next job index
-    size_t     completed;  // number of jobs completed
-    str_t *    names;
-    Result *   results;
+    std::mutex               mtx;
+    std::vector<Job>         jobs;
+    std::vector<Result>      results;
+    std::vector<std::string> names;
+    size_t                   idx;        // next job index
+    size_t                   completed;  // number of jobs completed
 };

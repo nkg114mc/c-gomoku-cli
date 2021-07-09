@@ -17,49 +17,67 @@
 #pragma once
 #include "position.h"
 #include "sprt.h"
-#include "str.h"
 #include "workers.h"
 
-#include <inttypes.h>
+#include <cinttypes>
+#include <string>
+#include <vector>
 
 struct SampleParams
 {
-    str_t  fileName;
-    double freq;
-    bool   bin, compress;
+    std::string fileName;
+    double      freq     = 1.0;
+    bool        bin      = false;
+    bool        compress = false;
 };
 
 struct Options
 {
-    str_t        openings, pgn, sgf, msg;
-    SPRTParam    sprtParam;
-    uint64_t     srand;
-    int          concurrency, games, rounds;
-    int          resignCount, resignScore;
-    int          drawCount, drawScore;
-    int          forceDrawAfter;
-    int          boardSize;
-    int          gameRule;
-    bool         log, random, repeat, transform;
-    bool         sprt, gauntlet, useTURN, saveLoseOnly;
-    bool         debug;
-    OpeningType  openingType;
+    std::string  openings, pgn, sgf, msg;
     SampleParams sp;
+    SPRTParam    sprtParam   = {.alpha = 0.05, .beta = 0.05};
+    uint64_t     srand       = 0;
+    int          concurrency = 1;
+    int          games = 1, rounds = 1;
+    int          resignCount = 0, resignScore = 0;
+    int          drawCount = 0, drawScore = 0;
+    int          forceDrawAfter = 0;
+    int          boardSize      = 15;
+    int          gameRule       = GOMOKU_FIVE_OR_MORE;
+    bool         useTURN        = true;
+    bool         log            = false;
+    bool         random         = false;
+    bool         repeat         = false;
+    bool         transform      = false;
+    bool         sprt           = false;
+    bool         gauntlet       = false;
+    bool         saveLoseOnly   = false;
+    bool         debug          = false;
+    OpeningType  openingType    = OPENING_OFFSET;
 };
 
 struct EngineOptions
 {
-    str_t   cmd, name, *options;
-    int64_t timeoutTurn, timeoutMatch, increment, nodes;
-    int     depth, numThreads;
-    int64_t maxMemory;
-    int64_t tolerance;
+    std::string              cmd, name;
+    std::vector<std::string> options;
+
+    // default time control info
+    int64_t timeoutTurn = 0, timeoutMatch = 0, increment = 0;
+    int64_t nodes = 0;
+    int     depth = 0;
+
+    // default thread num is 1
+    int numThreads = 1;
+
+    // default max memory is set to 350MB (same as Gomocup)
+    int64_t maxMemory = 367001600;
+
+    // default tolerance is 3
+    int64_t tolerance = 3000;
 };
 
-EngineOptions engine_options_init(void);
-void          engine_options_destroy(EngineOptions *eo);
-
-Options options_init(void);
-void    options_parse(int argc, const char **argv, Options *o, EngineOptions **eo);
-void    options_destroy(Options *o);
-void    options_print(Options *o, EngineOptions **eo);
+void options_parse(int                         argc,
+                   const char **               argv,
+                   Options &                   o,
+                   std::vector<EngineOptions> &eo);
+void options_print(const Options &o, const std::vector<EngineOptions> &eo);

@@ -32,33 +32,29 @@
 #include "engine.h"
 #include "position.h"
 #include "util.h"
-#include "vec.h"
 #include "workers.h"
 
-#include <assert.h>
+#include <cassert>
+#include <climits>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <iostream>
-#include <limits.h>
 #include <mutex>
 #include <signal.h>
 #include <sstream>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <vector>
 
-Engine::Engine(Worker *worker, bool debug) : w(worker), isDebug(debug), pid(0)
-{
-    name = str_init();
-}
+Engine::Engine(Worker *worker, bool debug) : w(worker), isDebug(debug), pid(0) {}
 
 Engine::~Engine()
 {
     if (pid)
         destroy();
-    str_destroy(&name);
 }
 
-void Engine::spawn(const char *cwd, const char *run, char **argv, bool readStdErr)
+void Engine::spawn(const char *cwd, const char *run, const char **argv, bool readStdErr)
 {
     assert(argv[0]);
 
@@ -242,12 +238,14 @@ void Engine::spawn(const char *cwd, const char *run, char **argv, bool readStdEr
 #endif
 }
 
-static void engine_parse_cmd(const char *cmd, str_t *cwd, str_t *run, str_t **args)
+static void engine_parse_cmd(const char *              cmd,
+                             std::string &             cwd,
+                             std::string &             run,
+                             std::vector<std::string> &args)
 {
     // Isolate the first token being the command to run.
-    scope(str_destroy) str_t token = str_init();
-    const char *             tail  = cmd;
-    tail                           = str_tok_esc(tail, &token, ' ', '\\');
+    std::string token;
+    const char *tail = string_tok_esc(token, cmd, ' ', '\\');
 
     // Split token into (cwd, run). Possible cases:
     // (a) unqualified path, like "demolito" (which evecvp() will search in PATH)
@@ -256,52 +254,51 @@ static void engine_parse_cmd(const char *cmd, str_t *cwd, str_t *run, str_t **ar
     // running
     // "../Engines/demolito" from the cwd, we execute run="./demolito" from
     // cwd="../Engines"
-    str_cpy_c(cwd, "./");
-    str_cpy(run, token);
-    const char *lastSlash = strrchr(token.buf, '/');
+    cwd                   = "./";
+    run                   = token;
+    const char *lastSlash = strrchr(token.c_str(), '/');
 
     if (lastSlash) {
-        str_ncpy(cwd, token, (size_t)(lastSlash - token.buf));
-        str_cpy_fmt(run, "./%s", lastSlash + 1);
+        cwd = std::string(token, 0, (size_t)(lastSlash - token.c_str()));
+        run = format("./%s", lastSlash + 1);
     }
 
-    // Collect the arguments into a vec of str_t, args[]
-    vec_push(*args, str_init_from(*run), str_t);  // argv[0] is the executed command
+    // Collect the arguments into a vec of string, args[]
+    args.push_back(run);  // argv[0] is the executed command
 
-    while ((tail = str_tok_esc(tail, &token, ' ', '\\')))
-        vec_push(*args, str_init_from(token), str_t);
+    while ((tail = string_tok_esc(token, tail, ' ', '\\')))
+        args.push_back(token);
 }
 
-void Engine::init(const char *cmd,
-                  const char *engine_name,
-                  int64_t     engine_tolerance,
-                  str_t *     outmsg)
+void Engine::init(const char * cmd,
+                  const char * engine_name,
+                  int64_t      engine_tolerance,
+                  std::string *outmsg)
 {
     if (!*cmd)
         DIE("[%d] missing command to start engine.\n", w->id);
 
-    str_cpy_c(&this->name, engine_name);
+    this->name      = engine_name;
     this->tolerance = engine_tolerance;
     this->messages  = outmsg;
 
     // Parse cmd into (cwd, run, args): we want to execute run from cwd with args.
-    scope(str_destroy) str_t cwd = str_init(), run = str_init();
-    str_t *                  args = vec_init(str_t);
-    engine_parse_cmd(cmd, &cwd, &run, &args);
+    std::string              cwd, run;
+    std::vector<std::string> args;
+    engine_parse_cmd(cmd, cwd, run, args);
 
-    // execvp() needs NULL terminated char **, not vec of str_t. Prepare a char **, whose
+    // execvp() needs NULL terminated char **, not vec of string. Prepare a char **, whose
     // elements point to the C-string buffers of the elements of args, with the required
     // NULL at the end.
-    char **argv = (char **)calloc(vec_size(args) + 1, sizeof(char *));
+    const char **argv = (const char **)calloc(args.size() + 1, sizeof(char *));
 
-    for (size_t i = 0; i < vec_size(args); i++) {
-        argv[i] = args[i].buf;
+    for (size_t i = 0; i < args.size(); i++) {
+        argv[i] = args[i].c_str();
     }
 
     // Spawn child process and plug pipes
-    spawn(cwd.buf, run.buf, argv, w->log != NULL);
+    spawn(cwd.c_str(), run.c_str(), argv, w->log != NULL);
 
-    vec_destroy_rec(args, str_destroy);
     free(argv);
 
     // parse engine ABOUT infomation
@@ -315,7 +312,7 @@ void Engine::destroy()
         return;
 
     // Order the engine to quit, and grant (tolerance) deadline for obeying
-    w->deadline_set(name.buf, system_msec() + tolerance, "exit");
+    w->deadline_set(name.c_str(), system_msec() + tolerance, "exit");
     writeln("END");
 
 #ifdef __MINGW32__
@@ -342,12 +339,12 @@ void Engine::destroy()
     pid = 0;
 }
 
-bool Engine::readln(str_t *line)
+bool Engine::readln(std::string &line)
 {
     if (!in)  // Check if engine has crashed
         return false;
 
-    if (!str_getline(line, in)) {
+    if (!string_getline(line, in)) {
         // Pipe returning EOF means engine crashed
         // Instead of dying instantly, close pipe to flag engine died and return false
         DIE_IF(w->id, fclose(in) < 0);
@@ -357,7 +354,7 @@ bool Engine::readln(str_t *line)
     }
 
     if (w->log)
-        DIE_IF(w->id, fprintf(w->log, "%s -> %s\n", name.buf, line->buf) < 0);
+        DIE_IF(w->id, fprintf(w->log, "%s -> %s\n", name.c_str(), line.c_str()) < 0);
 
     return true;
 }
@@ -379,72 +376,72 @@ void Engine::writeln(const char *buf)
     }
 
     if (w->log) {
-        DIE_IF(w->id, fprintf(w->log, "%s <- %s\n", name.buf, buf) < 0);
+        DIE_IF(w->id, fprintf(w->log, "%s <- %s\n", name.c_str(), buf) < 0);
         DIE_IF(w->id, fflush(w->log) < 0);
     }
 }
 
 void Engine::wait_for_ok()
 {
-    w->deadline_set(name.buf, system_msec() + tolerance, "start");
-    scope(str_destroy) str_t line = str_init();
+    w->deadline_set(name.c_str(), system_msec() + tolerance, "start");
+    std::string line;
 
     do {
-        if (!readln(&line))
-            DIE("[%d] engine %s exited before answering START\n", w->id, name.buf);
+        if (!readln(line))
+            DIE("[%d] engine %s exited before answering START\n", w->id, name.c_str());
 
-        if (const char *tail = str_prefix(line.buf, "ERROR"))  // an ERROR
-            DIE("[%d] engine %s output error:%s\n", w->id, name.buf, tail);
-    } while (strcmp(line.buf, "OK"));
+        if (const char *tail = string_prefix(line.c_str(), "ERROR"))  // an ERROR
+            DIE("[%d] engine %s output error:%s\n", w->id, name.c_str(), tail);
+    } while (line != "OK");
 
     w->deadline_clear();
 }
 
-bool Engine::bestmove(int64_t *timeLeft,
-                      int64_t  maxTurnTime,
-                      str_t *  best,
-                      Info *   info,
-                      int      moveply)
+bool Engine::bestmove(int64_t &    timeLeft,
+                      int64_t      maxTurnTime,
+                      std::string &best,
+                      Info &       info,
+                      int          moveply)
 {
-    int                      result = false;
-    scope(str_destroy) str_t line = str_init(), token = str_init();
+    int         result = false;
+    std::string line;
 
     const int64_t start          = system_msec();
-    const int64_t matchTimeLimit = start + *timeLeft;
+    const int64_t matchTimeLimit = start + timeLeft;
     int64_t       turnTimeLimit  = matchTimeLimit;
-    int64_t       turnTimeLeft   = *timeLeft;
+    int64_t       turnTimeLeft   = timeLeft;
     if (maxTurnTime > 0) {
         // engine should not think longer than the turn_time_limit
-        turnTimeLimit = start + min(*timeLeft, maxTurnTime);
-        turnTimeLeft  = min(*timeLeft, maxTurnTime);
+        turnTimeLimit = start + std::min(timeLeft, maxTurnTime);
+        turnTimeLeft  = std::min(timeLeft, maxTurnTime);
     }
 
-    w->deadline_set(name.buf, turnTimeLimit + tolerance, "move");
+    w->deadline_set(name.c_str(), turnTimeLimit + tolerance, "move");
     int64_t moveOverhead = std::min<int64_t>(tolerance / 2, 1000);
 
     while ((turnTimeLeft + moveOverhead) >= 0 && !result) {
-        if (!readln(&line))
+        if (!readln(line))
             goto Exit;
 
         const int64_t now = system_msec();
-        info->time        = now - start;
-        *timeLeft         = matchTimeLimit - now;
+        info.time         = now - start;
+        timeLeft          = matchTimeLimit - now;
         turnTimeLeft      = turnTimeLimit - now;
 
         if (this->isDebug) {
-            process_message_ifneeded(line.buf);
+            process_message_ifneeded(line.c_str());
         }
 
-        if (const char *tail = str_prefix(line.buf, "MESSAGE")) {
+        if (const char *tail = string_prefix(line.c_str(), "MESSAGE")) {
             // record engine messages
             if (messages)
-                str_cat_fmt(messages, "%i) %S: %s\n", moveply, name, tail + 1);
+                *messages += format("%i) %s: %s\n", moveply, name, tail + 1);
 
             // parse and store thing infomation to info
-            parse_thinking_messages(line.buf, info);
+            parse_thinking_messages(line.c_str(), info);
         }
-        else if (Position::is_valid_move_gomostr(line.buf)) {
-            str_cpy(best, line);
+        else if (Position::is_valid_move_gomostr(line)) {
+            best   = line;
             result = true;
         }
     }
@@ -455,24 +452,24 @@ bool Engine::bestmove(int64_t *timeLeft,
         writeln("YXSTOP");
 
         // For turn timeout, explicitly mark time left as negetive
-        *timeLeft = std::min(*timeLeft, INT64_MIN);
+        timeLeft = std::min(timeLeft, INT64_MIN);
 
         do {
-            if (!readln(&line))
+            if (!readln(line))
                 goto Exit;
 
             if (this->isDebug)
-                process_message_ifneeded(line.buf);
+                process_message_ifneeded(line.c_str());
 
-            if (const char *tail = str_prefix(line.buf, "MESSAGE")) {
+            if (const char *tail = string_prefix(line.c_str(), "MESSAGE")) {
                 // record engine messages
                 if (messages)
-                    str_cat_fmt(messages, "%i) %S: %s\n", moveply, name, tail + 1);
+                    *messages += format("%i) %s: %s\n", moveply, name, tail + 1);
 
                 // parse and store thing infomation to info
-                parse_thinking_messages(line.buf, info);
+                parse_thinking_messages(line.c_str(), info);
             }
-        } while (result = Position::is_valid_move_gomostr(line.buf), !result);
+        } while (result = Position::is_valid_move_gomostr(line), !result);
     }
 
 Exit:
@@ -485,14 +482,15 @@ bool Engine::is_crashed() const
     return !in || !out;
 }
 
-static void
-parse_and_display_engine_about(const Worker *w, str_t &line, str_t *engine_name)
+static void parse_and_display_engine_about(const Worker *   w,
+                                           std::string_view line,
+                                           std::string &    engine_name)
 {
     int                      flag = 0;
     std::vector<std::string> tokens;
     std::stringstream        ss;
-    for (size_t i = 0; i < line.len; i++) {
-        char ch = line.buf[i];
+    for (size_t i = 0; i < line.size(); i++) {
+        char ch = line[i];
         if (ch == '\"') {
             flag = (flag + 1) % 2;
         }
@@ -525,8 +523,8 @@ parse_and_display_engine_about(const Worker *w, str_t &line, str_t *engine_name)
             if ((i + 1) < tokens.size()) {
                 name = tokens[i + 1];
                 // Set engine name to about name
-                if (!*engine_name->buf)
-                    str_cpy_c(engine_name, name.c_str());
+                if (engine_name.empty())
+                    engine_name = name;
             }
         }
         else if (tokens[i] == "version") {
@@ -557,23 +555,23 @@ parse_and_display_engine_about(const Worker *w, str_t &line, str_t *engine_name)
 // process engine ABOUT command
 void Engine::parse_about(const char *fallbackName)
 {
-    w->deadline_set(*name.buf ? name.buf : fallbackName,
+    w->deadline_set(!name.empty() ? name.c_str() : fallbackName,
                     system_msec() + tolerance,
                     "about");
     writeln("ABOUT");
-    scope(str_destroy) str_t line = str_init();
 
-    if (!readln(&line))
-        DIE("[%d] engine %s exited before answering ABOUT\n", w->id, name.buf);
+    std::string line;
+    if (!readln(line))
+        DIE("[%d] engine %s exited before answering ABOUT\n", w->id, name.c_str());
 
     w->deadline_clear();
 
     // parse about infos
-    parse_and_display_engine_about(w, line, &name);
+    parse_and_display_engine_about(w, line, name);
 
     // If we can not get a name from engname or about, use fallback name instead
-    if (!*name.buf)
-        str_cpy_c(&name, fallbackName);
+    if (name.empty())
+        name = fallbackName;
 }
 
 // process MESSAGE, UNKNOWN, ERROR, DEBUG messages
@@ -582,23 +580,23 @@ void Engine::process_message_ifneeded(const char *line)
     // Isolate the first token being the command to run.
     const char *tail = nullptr;
 
-    if ((tail = str_prefix(line, "MESSAGE"))) {
-        printf("engine %s output message:%s\n", name.buf, tail);
+    if ((tail = string_prefix(line, "MESSAGE"))) {
+        printf("engine %s output message:%s\n", name.c_str(), tail);
     }
-    else if ((tail = str_prefix(line, "UNKNOWN"))) {
-        printf("engine %s output unknown:%s\n", name.buf, tail);
+    else if ((tail = string_prefix(line, "UNKNOWN"))) {
+        printf("engine %s output unknown:%s\n", name.c_str(), tail);
     }
-    else if ((tail = str_prefix(line, "DEBUG"))) {
-        printf("engine %s output debug:%s\n", name.buf, tail);
+    else if ((tail = string_prefix(line, "DEBUG"))) {
+        printf("engine %s output debug:%s\n", name.c_str(), tail);
     }
-    else if ((tail = str_prefix(line, "ERROR"))) {
-        printf("engine %s output error:%s\n", name.buf, tail);
+    else if ((tail = string_prefix(line, "ERROR"))) {
+        printf("engine %s output error:%s\n", name.c_str(), tail);
     }
 }
 
-void Engine::parse_thinking_messages([[maybe_unused]] const char *line, Info *info)
+void Engine::parse_thinking_messages([[maybe_unused]] const char *line, Info &info)
 {
     // Set default value
-    info->score = 0;
-    info->depth = 0;
+    info.score = 0;
+    info.depth = 0;
 }

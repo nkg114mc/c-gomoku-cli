@@ -17,39 +17,34 @@
 #include "openings.h"
 
 #include "util.h"
-#include "vec.h"
 
-#include <assert.h>
-#include <sstream>
+#include <cassert>
 #include <string>
 
 Openings::Openings(const char *fileName, bool random, uint64_t srand) : file(nullptr)
 {
-    index = (long *)vec_init(size_t);
-
     if (*fileName) {
         DIE_IF(0, !(file = fopen(fileName, FOPEN_READ_MODE)));
     }
 
     if (file) {
         // Fill o.index[] to record file offsets for each lines
-        scope(str_destroy) str_t line = str_init();
+        std::string line;
 
         do {
-            vec_push(index, ftell(file), long);
-        } while (str_getline(&line, file));
+            index.push_back(ftell(file));
+        } while (string_getline(line, file));
 
-        vec_pop(index);  // EOF offset must be removed
+        index.pop_back();  // EOF offset must be removed
 
         if (random) {
             // Shuffle o.index[], which will be read sequentially from the beginning. This
             // allows consistent treatment of random and !random, and guarantees no
             // repetition N-cycles in the random case, rather than sqrt(N) (birthday
             // paradox) if random seek each time.
-            const size_t n    = vec_size(index);
-            uint64_t     seed = srand ? srand : (uint64_t)system_msec();
+            uint64_t seed = srand ? srand : (uint64_t)system_msec();
 
-            for (size_t i = n - 1; i > 0; i--) {
+            for (size_t i = index.size() - 1; i > 0; i--) {
                 const size_t j   = prng(&seed) % (i + 1);
                 long         tmp = index[i];
                 index[i]         = index[j];
@@ -65,27 +60,25 @@ Openings::~Openings()
 {
     if (file)
         DIE_IF(0, fclose(file) < 0);
-
-    vec_destroy(index);
 }
 
 // Returns current round
-size_t Openings::next(str_t *fen, size_t idx, int threadId)
+size_t Openings::next(std::string &fen, size_t idx, int threadId)
 {
     if (!file) {
-        str_cpy_c(fen, "");
+        fen.clear();
         return 0;
     }
 
     // Read 'fen' from file
-    scope(str_destroy) str_t line = str_init();
+    std::string line;
 
     {
         std::lock_guard lock(mtx);
-        DIE_IF(threadId, fseek(file, index[idx % vec_size(index)], SEEK_SET) < 0);
-        DIE_IF(threadId, !str_getline(&line, file));
+        DIE_IF(threadId, fseek(file, index[idx % index.size()], SEEK_SET) < 0);
+        DIE_IF(threadId, !string_getline(line, file));
     }
 
-    str_cpy(fen, line);
-    return idx / vec_size(index);
+    fen = std::move(line);
+    return idx / index.size();
 }

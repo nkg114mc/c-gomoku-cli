@@ -16,64 +16,39 @@
 
 #include "seqwriter.h"
 
-#include "vec.h"
-
-#include <assert.h>
+#include <algorithm>
+#include <cassert>
 #include <cstring>
 
-// SeqStr
-
-void SeqStr::init(size_t idx, str_t str)
+template <typename T> auto insert_sorted(std::vector<T> &vec, T &&item)
 {
-    this->idx = idx;
-    this->str = str_init_from(str);
+    auto pos = std::upper_bound(vec.begin(), vec.end(), item);
+    return vec.insert(pos, std::move(item));
 }
-
-void SeqStr::destroy()
-{
-    str_destroy(&str);
-}
-
-// SeqWriter
 
 SeqWriter::SeqWriter(const char *fileName, const char *mode) : idxNext(0)
 {
     out = fopen(fileName, mode);
-    buf = vec_init(SeqStr);
 }
 
 SeqWriter::~SeqWriter()
 {
-    // vec_destroy_rec(this->buf, destroy);
-
     // write out all records even if not sequential
-    write_to_i(vec_size(buf));
+    write_to_i(buf.size());
 
     fclose(this->out);
 }
 
-void SeqWriter::push(size_t idx, str_t str)
+void SeqWriter::push(size_t idx, std::string_view str)
 {
     std::lock_guard lock(mtx);
 
-    // Append to buf[n]
-    const size_t n = vec_size(buf);
-    SeqStr       sstr;
-    sstr.init(idx, str);
-    vec_push(buf, sstr, SeqStr);
-
-    // insert in correct position
-    for (size_t i = 0; i < n; i++)
-        if (buf[i].idx > idx) {
-            SeqStr tmp = buf[n];
-            memmove(&buf[i + 1], &buf[i], (n - i) * sizeof(SeqStr));
-            buf[i] = tmp;
-            break;
-        }
+    // Insert to buf[n] in correct position
+    insert_sorted(buf, SeqStr {idx, str});
 
     // Calculate i such that buf[0..i-1] is the longest sequential chunk
     size_t i = 0;
-    for (; i < vec_size(buf); i++)
+    for (; i < buf.size(); i++)
         if (buf[i].idx != idxNext + i) {
             assert(buf[i].idx > idxNext + i);
             break;
@@ -85,16 +60,14 @@ void SeqWriter::push(size_t idx, str_t str)
 
 void SeqWriter::write_to_i(size_t i)
 {
-    // Write buf[0..i-1] to file, and destroy elements
+    // Write buf[0..i-1] to file
     for (size_t j = 0; j < i; j++) {
-        fputs(buf[j].str.buf, out);
-        buf[j].destroy();
+        fputs(buf[j].str.c_str(), out);
     }
     fflush(out);
 
     // Delete buf[0..i-1]
-    memmove(&buf[0], &buf[i], (vec_size(buf) - i) * sizeof(SeqStr));
-    vec_ptr(buf)->size -= i;
+    buf.erase(buf.begin(), buf.begin() + i);
 
     // Updated next expected index
     idxNext += i;

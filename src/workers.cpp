@@ -1,8 +1,8 @@
 #include "workers.h"
 
 #include "util.h"
-#include "vec.h"
 
+#include <cassert>
 #include <cstdlib>
 
 Worker::Worker(int i, const char *logName) : id(i + 1), seed(i), log(nullptr)

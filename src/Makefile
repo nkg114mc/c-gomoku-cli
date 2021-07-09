@@ -13,9 +13,7 @@ OBJ = $(OBJFOLD)/engine.o \
 	$(OBJFOLD)/options.o \
 	$(OBJFOLD)/seqwriter.o \
 	$(OBJFOLD)/sprt.o \
-	$(OBJFOLD)/str.o \
 	$(OBJFOLD)/util.o \
-	$(OBJFOLD)/vec.o \
 	$(OBJFOLD)/workers.o \
 	$(OBJFOLD)/position.o \
 	$(OBJFOLD)/game.o

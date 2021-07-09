@@ -14,12 +14,11 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <assert.h>
-#include <errno.h>
-#include <stdarg.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
+#include <algorithm>
+#include <cassert>
+#include <cerrno>
+#include <cstdlib>
+#include <ctime>
 #ifdef __MINGW32__
     #include <Windows.h>
 #endif
@@ -85,4 +84,112 @@ void system_sleep(int64_t msec)
             line,
             strerror(errno));
     exit(EXIT_FAILURE);
+}
+
+size_t string_getline(std::string &out, FILE *in)
+{
+    assert(in);
+    out.clear();
+    int c;
+
+#ifdef __MINGW32__
+    _lock_file(in);
+#else
+    flockfile(in);
+#endif
+
+    while (true) {
+#ifdef __MINGW32__
+        c = _getc_nolock(in);
+#else
+        c = getc_unlocked(in);
+#endif
+
+        if (c != '\n' && c != EOF)
+            out.push_back(c);
+        else
+            break;
+    }
+
+#ifdef __MINGW32__
+    _unlock_file(in);
+#else
+    funlockfile(in);
+#endif
+
+    return out.size() + (c == '\n');
+}
+
+// Read next character using escape character. Result in *out. Retuns tail pointer, and
+// sets escaped=true if escape character parsed.
+static const char *string_getc_esc(const char *s, char *out, bool *escaped, char esc)
+{
+    if (*s != esc) {
+        *escaped = false;
+        *out     = *s;
+        return s + 1;
+    }
+    else {
+        assert(*s && *s == esc);
+        *escaped = true;
+        *out     = *(s + 1);
+        return s + 2;
+    }
+}
+
+const char *string_tok(std::string &token, const char *s, const char *delim)
+{
+    assert(delim && *delim);
+
+    // empty tail: no-op
+    if (!s)
+        return nullptr;
+
+    // eat delimiters before token
+    s += strspn(s, delim);
+
+    // eat non delimiters into token
+    const size_t n = strcspn(s, delim);
+    token          = std::string(s, n);
+    s += n;
+
+    // return string tail or NULL if token empty
+    return !token.empty() ? s : nullptr;
+}
+
+const char *string_tok_esc(std::string &token, const char *s, char delim, char esc)
+{
+    assert(delim && esc);
+
+    // empty tail: no-op
+    if (!s)
+        return nullptr;
+
+    // clear token
+    token.clear();
+
+    const char *tail = s;
+    char        c;
+    bool        escaped, accumulate = false;
+
+    while (*tail && (tail = string_getc_esc(tail, &c, &escaped, esc))) {
+        if (!accumulate && (c != delim || escaped))
+            accumulate = true;
+
+        if (accumulate) {
+            if (c != delim || escaped)
+                token.push_back(c);
+            else
+                break;
+        }
+    }
+
+    // return string tail or NULL if token empty
+    return !token.empty() ? tail : nullptr;
+}
+
+const char *string_prefix(const char *s, const char *prefix)
+{
+    size_t len = strlen(prefix);
+    return strncmp(s, prefix, len) ? NULL : s + len;
 }

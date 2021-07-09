@@ -15,32 +15,33 @@
  */
 
 #pragma once
-#include "str.h"
 
 #include <cstdio>
 #include <mutex>
+#include <string_view>
+#include <vector>
 
 struct SeqStr
 {
-    size_t idx;
-    str_t  str;
-    void   init(size_t idx, str_t str);
-    void   destroy();
+    size_t      idx;
+    std::string str;
+    SeqStr(size_t i, std::string_view s) : idx(i), str(s) {}
+    bool operator<(const SeqStr &other) const { return idx < other.idx; }
 };
 
 class SeqWriter
 {
 public:
-    std::mutex mtx;
-    SeqStr *   buf;
-    FILE *     out;
-    size_t     idxNext;
-
     SeqWriter(const char *fileName, const char *mode);
     ~SeqWriter();
 
-    void push(size_t idx, str_t str);
+    void push(size_t idx, std::string_view str);
 
 private:
+    std::mutex          mtx;
+    std::vector<SeqStr> buf;
+    FILE *              out;
+    size_t              idxNext;
+
     void write_to_i(size_t i);
 };

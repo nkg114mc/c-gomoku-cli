@@ -18,12 +18,12 @@
 
 #include "util.h"
 
-#include <assert.h>
-#include <ctype.h>
+#include <cassert>
+#include <cctype>
+#include <cstdio>
+#include <cstring>
 #include <iostream>
 #include <sstream>
-#include <stdio.h>
-#include <string.h>
 #include <string>
 
 typedef int16_t Direction;
@@ -375,7 +375,7 @@ bool Position::check_five_in_line_side(Color side, bool allow_long_connection)
     }
 
     for (k = 0; k < (boardSize * 2 - 1); k++) {
-        i                 = min(k, boardSize - 1);
+        i                 = std::min(k, boardSize - 1);
         j                 = k - i;
         int continueCount = 0;
         while (isInBoard(POS(i, j))) {
@@ -417,14 +417,12 @@ bool Position::check_five_in_line_lastmove(bool allow_long_connection)
     return check_five_in_line_side(lastPiece, allow_long_connection);
 }
 
-move_t Position::gomostr_to_move(char *move_str) const
+move_t Position::gomostr_to_move(std::string_view movestr) const
 {
-    std::string mvstr = std::string(move_str);
-
     int    commaCount = 0;
     size_t commaIdx   = 0;
-    for (size_t i = 0; i < mvstr.length(); i++) {
-        if (mvstr[i] == ',') {
+    for (size_t i = 0; i < movestr.length(); i++) {
+        if (movestr[i] == ',') {
             commaIdx = i;
             commaCount++;
         }
@@ -432,9 +430,9 @@ move_t Position::gomostr_to_move(char *move_str) const
 
     assert(commaCount == 1);
 
-    std::string xstr      = mvstr.substr(0, commaIdx);
-    size_t      secondLen = mvstr.length() - commaIdx - 1;
-    std::string ystr      = mvstr.substr(commaIdx + 1, secondLen);
+    size_t      secondLen = movestr.length() - commaIdx - 1;
+    std::string xstr {movestr.substr(0, commaIdx)};
+    std::string ystr {movestr.substr(commaIdx + 1, secondLen)};
 
     int x = std::stoi(xstr);
     int y = std::stoi(ystr);
@@ -451,14 +449,12 @@ static bool isNumber(std::string &str)
     return !*p;
 }
 
-bool Position::is_valid_move_gomostr(char *move_str)
+bool Position::is_valid_move_gomostr(std::string_view movestr)
 {
-    std::string mvstr = std::string(move_str);
-
     int    commaCount = 0;
     size_t commaIdx   = 0;
-    for (size_t i = 0; i < mvstr.length(); i++) {
-        if (mvstr[i] == ',') {
+    for (size_t i = 0; i < movestr.length(); i++) {
+        if (movestr[i] == ',') {
             commaIdx = i;
             commaCount++;
         }
@@ -468,14 +464,12 @@ bool Position::is_valid_move_gomostr(char *move_str)
         return false;  // no comma, or more than one comma?
     }
 
-    std::string xstr      = mvstr.substr(0, commaIdx);
-    size_t      secondLen = mvstr.length() - commaIdx - 1;
-    std::string ystr      = mvstr.substr(commaIdx + 1, secondLen);
-    if ((!isNumber(xstr)) || (!isNumber(ystr))) {
-        return false;  // any of two coords are not number
-    }
+    size_t      secondLen = movestr.length() - commaIdx - 1;
+    std::string xstr {movestr.substr(0, commaIdx)};
+    std::string ystr {movestr.substr(commaIdx + 1, secondLen)};
 
-    return true;
+    // any of two coords are not number
+    return isNumber(xstr) && isNumber(ystr);
 }
 
 std::string Position::move_to_gomostr(move_t move) const
@@ -504,7 +498,7 @@ std::string Position::move_to_opening_str(move_t move, OpeningType type) const
 }
 
 // apply the openning str in the specific format
-bool Position::apply_opening(str_t &opening_str, OpeningType type)
+bool Position::apply_opening(std::string_view opening_str, OpeningType type)
 {
     std::vector<Pos> openning_pos;
     bool             parsingOk = false;
@@ -528,14 +522,15 @@ bool Position::apply_opening(str_t &opening_str, OpeningType type)
     return true;
 }
 
-bool Position::parse_opening_offset_linestr(std::vector<Pos> &opening_pos, str_t &linestr)
+bool Position::parse_opening_offset_linestr(std::vector<Pos> &opening_pos,
+                                            std::string_view  linestr)
 {
     opening_pos.clear();
     int hboardSize = this->boardSize / 2;
 
     std::stringstream ss;
-    for (size_t i = 0; i < linestr.len; i++) {
-        char ch = linestr.buf[i];
+    for (size_t i = 0; i < linestr.size(); i++) {
+        char ch = linestr[i];
         if ((ch <= '9' && ch >= '0') || ch == '-') {
             ss << ch;
         }
@@ -577,13 +572,14 @@ bool Position::parse_opening_offset_linestr(std::vector<Pos> &opening_pos, str_t
     return true;  // ok
 }
 
-bool Position::parse_opening_pos_linestr(std::vector<Pos> &opening_pos, str_t &linestr)
+bool Position::parse_opening_pos_linestr(std::vector<Pos> &opening_pos,
+                                         std::string_view  linestr)
 {
     opening_pos.clear();
 
     std::stringstream ss;
-    for (size_t i = 0; i < linestr.len; i++) {
-        char ch = linestr.buf[i];
+    for (size_t i = 0; i < linestr.size(); i++) {
+        char ch = linestr[i];
 
         if (ch >= 'a' && ch <= 'z') {
             ss << ' ' << int(ch - 'a') << ' ';

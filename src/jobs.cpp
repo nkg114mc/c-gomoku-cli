@@ -16,26 +16,27 @@
 
 #include "jobs.h"
 
-#include "vec.h"
+#include "util.h"
 #include "workers.h"
 
-#include <stdio.h>
+#include <cassert>
+#include <cstdio>
 
-static void job_queue_init_pair(int   games,
-                                int   e1,
-                                int   e2,
-                                int   pair,
-                                int * added,
-                                int   round,
-                                Job **jobs)
+static void job_queue_init_pair(int               games,
+                                int               e1,
+                                int               e2,
+                                int               pair,
+                                int &             added,
+                                int               round,
+                                std::vector<Job> &jobs)
 {
     for (int g = 0; g < games; g++) {
         const Job j = {.ei      = {e1, e2},
                        .pair    = pair,
                        .round   = round,
-                       .game    = (*added)++,
+                       .game    = added++,
                        .reverse = (bool)(g % 2)};
-        vec_push(*jobs, j, Job);
+        jobs.push_back(j);
     }
 }
 
@@ -45,26 +46,21 @@ JobQueue::JobQueue(int engines, int rounds, int games, bool gauntlet)
 {
     assert(engines >= 2 && rounds >= 1 && games >= 1);
 
-    jobs    = vec_init(Job);
-    results = vec_init(Result);
-    names   = vec_init(str_t);
-
     // Prepare engine names: blank for now, will be discovered at run time (concurrently)
-    for (int i = 0; i < engines; i++)
-        vec_push(names, str_init(), str_t);
+    names.resize(engines);
 
     if (gauntlet) {
         // Gauntlet: N-1 pairs (0, e2) with 0 < e2
         for (int e2 = 1; e2 < engines; e2++) {
             const Result r = {.ei = {0, e2}, .count = {0}};
-            vec_push(results, r, Result);
+            results.push_back(r);
         }
 
         for (int r = 0; r < rounds; r++) {
             int added = 0;  // number of games already added to the current round
 
             for (int e2 = 1; e2 < engines; e2++)
-                job_queue_init_pair(games, 0, e2, e2 - 1, &added, r, &jobs);
+                job_queue_init_pair(games, 0, e2, e2 - 1, added, r, jobs);
         }
     }
     else {
@@ -72,7 +68,7 @@ JobQueue::JobQueue(int engines, int rounds, int games, bool gauntlet)
         for (int e1 = 0; e1 < engines - 1; e1++)
             for (int e2 = e1 + 1; e2 < engines; e2++) {
                 const Result r = {.ei = {e1, e2}, .count = {0}};
-                vec_push(results, r, Result);
+                results.push_back(r);
             }
 
         for (int r = 0; r < rounds; r++) {
@@ -81,26 +77,19 @@ JobQueue::JobQueue(int engines, int rounds, int games, bool gauntlet)
 
             for (int e1 = 0; e1 < engines - 1; e1++)
                 for (int e2 = e1 + 1; e2 < engines; e2++)
-                    job_queue_init_pair(games, e1, e2, pair++, &added, r, &jobs);
+                    job_queue_init_pair(games, e1, e2, pair++, added, r, jobs);
         }
     }
 }
 
-JobQueue::~JobQueue()
-{
-    vec_destroy(results);
-    vec_destroy(jobs);
-    vec_destroy_rec(names, str_destroy);
-}
-
-bool JobQueue::pop(Job *j, size_t *idx_in, size_t *count)
+bool JobQueue::pop(Job &j, size_t &idx_in, size_t &count)
 {
     std::lock_guard lock(mtx);
 
-    if (this->idx < vec_size(this->jobs)) {
-        *j      = this->jobs[this->idx];
-        *idx_in = this->idx++;
-        *count  = vec_size(this->jobs);
+    if (this->idx < jobs.size()) {
+        j      = this->jobs[this->idx];
+        idx_in = this->idx++;
+        count  = jobs.size();
         return true;
     }
 
@@ -123,22 +112,22 @@ bool JobQueue::done()
 {
     std::lock_guard lock(mtx);
 
-    assert(idx <= vec_size(jobs));
-    return idx == vec_size(jobs);
+    assert(idx <= jobs.size());
+    return idx == jobs.size();
 }
 
 void JobQueue::stop()
 {
     std::lock_guard lock(mtx);
-    idx = vec_size(jobs);
+    idx = jobs.size();
 }
 
 void JobQueue::set_name(int ei, const char *name)
 {
     std::lock_guard lock(mtx);
 
-    if (!names[ei].len)
-        str_cpy_c(&names[ei], name);
+    if (names[ei].empty())
+        names[ei] = name;
 }
 
 void JobQueue::print_results(size_t frequency)
@@ -146,9 +135,9 @@ void JobQueue::print_results(size_t frequency)
     std::lock_guard lock(mtx);
 
     if (completed && completed % frequency == 0) {
-        scope(str_destroy) str_t out = str_init_from_c("Tournament update:\n");
+        std::string out = "Tournament update:\n";
 
-        for (size_t i = 0; i < vec_size(results); i++) {
+        for (size_t i = 0; i < results.size(); i++) {
             const Result r = results[i];
             const int    n =
                 r.count[RESULT_WIN] + r.count[RESULT_LOSS] + r.count[RESULT_DRAW];
@@ -158,18 +147,17 @@ void JobQueue::print_results(size_t frequency)
                 sprintf(score,
                         "%.3f",
                         (r.count[RESULT_WIN] + 0.5 * r.count[RESULT_DRAW]) / n);
-                str_cat_fmt(&out,
-                            "%S vs %S: %i - %i - %i  [%s] %i\n",
-                            names[r.ei[0]],
-                            names[r.ei[1]],
-                            r.count[RESULT_WIN],
-                            r.count[RESULT_LOSS],
-                            r.count[RESULT_DRAW],
-                            score,
-                            n);
+                out += format("%s vs %s: %i - %i - %i  [%s] %i\n",
+                              names[r.ei[0]],
+                              names[r.ei[1]],
+                              r.count[RESULT_WIN],
+                              r.count[RESULT_LOSS],
+                              r.count[RESULT_DRAW],
+                              score,
+                              n);
             }
         }
 
-        fputs(out.buf, stdout);
+        fputs(out.c_str(), stdout);
     }
 }

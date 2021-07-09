@@ -15,9 +15,10 @@
  */
 
 #pragma once
-#include <inttypes.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <cinttypes>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
 
 template <class T1, class T2> inline auto max(const T1 a, const T2 b)
 {
@@ -62,3 +63,59 @@ void    system_sleep(int64_t msec);
     #define FOPEN_APPEND_MODE        "a"
     #define FOPEN_APPEND_BINARY_MODE "ab"
 #endif
+
+/**
+ * printf like formatting for C++ with std::string
+ * Original source: https://stackoverflow.com/a/26221725/11722
+ */
+template <typename... Args>
+std::string stringFormatInternal(const char *format, Args &&...args)
+{
+    size_t size = snprintf(nullptr, 0, format, std::forward<Args>(args)...) + 1;
+    if (size <= 0)
+        DIE("Error during formatting.");
+    char  smallbuf[64];
+    char *buf = size <= sizeof(smallbuf) ? smallbuf : new char[size];
+    snprintf(buf, size, format, args...);
+    std::string ret(buf, buf + size - 1);
+    if (size > sizeof(smallbuf))
+        delete buf;
+    return ret;  // NRVO
+}
+
+/**
+ * Convert all std::strings to const char* using constexpr if (C++17)
+ */
+template <typename T> static auto convert_string_to_c_str(T &&t)
+{
+    if constexpr (std::is_same<std::remove_cv_t<std::remove_reference_t<T>>,
+                               std::string>::value)
+        return std::forward<T>(t).c_str();
+    else
+        return std::forward<T>(t);
+}
+
+template <typename... Args> std::string format(const char *fmt, Args &&...args)
+{
+    return stringFormatInternal(fmt,
+                                convert_string_to_c_str(std::forward<Args>(args))...);
+}
+
+// reads a line from file 'in', into valid string 'out', and return the number of
+// characters read (including the '\n' if any). The '\n' is discarded from the output, but
+// still counted.
+size_t string_getline(std::string &out, FILE *in);
+
+// reads a token into valid string 'token', from s, using delim characters as a
+// generalisation for white spaces. returns tail pointer on success, otherwise NULL (no
+// more tokens to read).
+const char *string_tok(std::string &token, const char *s, const char *delim);
+
+// Similar to string_tok(), but single delimiter, and using escape character. For example:
+// s = "alice\ bob charlie", delim=' ', esc='\' => token="alice bob", returns
+// tail="charlie"
+const char *string_tok_esc(std::string &token, const char *s, char delim, char esc);
+
+// If s starts with prefix, return the tail (from s = prefix + tail), otherwise return
+// NULL.
+const char *string_prefix(const char *s, const char *prefix);

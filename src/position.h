@@ -15,10 +15,10 @@
  */
 
 #pragma once
-#include "str.h"
 
-#include <assert.h>
+#include <cassert>
 #include <string>
+#include <string_view>
 #include <vector>
 
 typedef uint16_t move_t;
@@ -71,7 +71,7 @@ public:
 
     void transform(TransformType type);
 
-    move_t      gomostr_to_move(char *move_str) const;
+    move_t      gomostr_to_move(std::string_view movestr) const;
     std::string move_to_gomostr(move_t move) const;
     std::string move_to_opening_str(move_t move, OpeningType type) const;
 
@@ -86,12 +86,12 @@ public:
     bool check_five_in_line_lastmove(bool allow_long_connection);     // const;
 
     // about opening
-    bool        apply_opening(str_t &opening_str, OpeningType type);
+    bool        apply_opening(std::string_view opening_str, OpeningType type);
     std::string to_opening_str(OpeningType type) const;
 
     // static methods
     static void pos_move_with_copy(Position *after, const Position *before, move_t m);
-    static bool is_valid_move_gomostr(char *move_str);
+    static bool is_valid_move_gomostr(std::string_view movestr);
 
 private:
     Color    board[MaxBoardSizeSqr];
@@ -114,8 +114,10 @@ private:
                            int &conCnt,
                            int &fiveCnt,
                            Pos *connectionLine);
-    bool parse_opening_offset_linestr(std::vector<Pos> &opening_pos, str_t &linestr);
-    bool parse_opening_pos_linestr(std::vector<Pos> &opening_pos, str_t &linestr);
+    bool parse_opening_offset_linestr(std::vector<Pos> &opening_pos,
+                                      std::string_view  linestr);
+    bool parse_opening_pos_linestr(std::vector<Pos> &opening_pos,
+                                   std::string_view  linestr);
 
     // renju helpers
     enum OpenFourType { OF_NONE, OF_TRUE /*_OOOO_*/, OF_LONG /*O_OOO_O*/ };

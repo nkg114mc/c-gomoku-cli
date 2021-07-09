@@ -15,20 +15,21 @@
  */
 
 #pragma once
-#include "str.h"
 
 #include <cstdio>
 #include <mutex>
+#include <vector>
 
 class Openings
 {
 public:
-    std::mutex mtx;
-    FILE *     file;
-    long *     index;  // vector of file offsets
-
     Openings(const char *fileName, bool random, uint64_t srand);
     ~Openings();
 
-    size_t next(str_t *fen, size_t idx, int threadId);
+    size_t next(std::string &fen, size_t idx, int threadId);
+
+private:
+    std::mutex        mtx;
+    FILE *            file;
+    std::vector<long> index;  // vector of file offsets
 };

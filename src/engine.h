@@ -19,8 +19,6 @@
     #include <sys/types.h>
 #endif
 
-#include "str.h"
-
 #include <cinttypes>
 #include <cstdbool>
 #include <cstdio>
@@ -39,23 +37,24 @@ struct Info
 class Engine
 {
 public:
-    str_t name;
+    std::string name;
 
     Engine(Worker *worker, bool debug);
+    Engine(const Engine &) = delete;
     ~Engine();
 
-    void init(const char *cmd, const char *name, int64_t tolerance, str_t *outmsg);
+    void init(const char *cmd, const char *name, int64_t tolerance, std::string *outmsg);
     void destroy();
 
-    bool readln(str_t *line);
+    bool readln(std::string &line);
     void writeln(const char *buf);
 
     void wait_for_ok();
-    bool bestmove(int64_t *timeLeft,
-                  int64_t  maxTurnTime,
-                  str_t *  best,
-                  Info *   info,
-                  int      moveply);
+    bool bestmove(int64_t &    timeLeft,
+                  int64_t      maxTurnTime,
+                  std::string &best,
+                  Info &       info,
+                  int          moveply);
 
     bool is_crashed() const;
 
@@ -70,13 +69,13 @@ private:
     pid_t pid;
 #endif
 
-    FILE *  in, *out;
-    str_t * messages;
-    int64_t tolerance;
+    FILE *       in, *out;
+    std::string *messages;
+    int64_t      tolerance;
 
-    void spawn(const char *cwd, const char *run, char **argv, bool readStdErr);
+    void spawn(const char *cwd, const char *run, const char **argv, bool readStdErr);
     void parse_about(const char *fallbackName);
     // process MESSAGE, UNKNOWN, ERROR, DEBUG messages
     void process_message_ifneeded(const char *line);
-    void parse_thinking_messages(const char *line, Info *info);
+    void parse_thinking_messages(const char *line, Info &info);
 };
