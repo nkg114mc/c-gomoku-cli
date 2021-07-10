@@ -26,7 +26,7 @@ public:
     Openings(const char *fileName, bool random, uint64_t srand);
     ~Openings();
 
-    size_t next(std::string &fen, size_t idx, int threadId);
+    size_t next(std::string &opening_str, size_t idx, int threadId);
 
 private:
     std::mutex        mtx;

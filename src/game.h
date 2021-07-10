@@ -58,16 +58,16 @@ public:
     std::vector<Sample>   samples;    // list of samples when generating training data
     GameRule              game_rule;  // rule is gomoku or renju, etc
     int                   round, game, ply, state, board_size;
+    Worker *const         w;
 
-    Game(int round, int game);
+    Game(int round, int game, Worker *worker);
 
-    bool load_fen(std::string_view fen, int *color, const Options *o, size_t round);
-
-    int play(Worker *             w,
-             const Options *      o,
-             Engine               engines[2],
-             const EngineOptions *eo[2],
-             bool                 reverse);
+    bool load_opening(std::string_view opening_str,
+                      const Options &  o,
+                      size_t           currentRound,
+                      Color &          color);
+    int
+    play(const Options &o, Engine engines[2], const EngineOptions *eo[2], bool reverse);
 
     void
     decode_state(std::string &result, std::string &reason, const char *restxt[3]) const;
@@ -78,15 +78,14 @@ public:
 
 private:
     int  game_apply_rules(move_t lastmove);
-    void compute_time_left(const EngineOptions *eo, int64_t *timeLeft);
-    void send_board_command(const Position *pos, Worker *w, Engine *engine);
-    void gomocup_turn_info_command(const EngineOptions *eo,
+    void compute_time_left(const EngineOptions &eo, int64_t &timeLeft);
+    void send_board_command(const Position &position, Engine &engine);
+    void gomocup_turn_info_command(const EngineOptions &eo,
                                    const int64_t        timeLeft,
-                                   Engine *             engine);
-    void gomocup_game_info_command(const EngineOptions *eo,
-                                   const Options *      option,
-                                   Engine *             engine);
-
+                                   Engine &             engine);
+    void gomocup_game_info_command(const EngineOptions &eo,
+                                   const Options &      option,
+                                   Engine &             engine);
     void export_samples_csv(FILE *out) const;
     void export_samples_bin(FILE *out, LZ4F_compressionContext_t lz4Ctx) const;
 };

@@ -1,7 +1,7 @@
 CC=g++
 #CXXFLAGS+= -g -DDEBUG
 CXXFLAGS+= -DNDEBUG
-CXXFLAGS+= -std=c++17 -O3 -finline-functions -funroll-all-loops -fno-rtti -msse4.2 -pthread -lm -m64 -DIS_64BIT -flto -Wall -Wcast-qual -pedantic -Wextra -Wshadow -fstrict-aliasing -Wno-attributes
+CXXFLAGS+= -std=c++17 -O2 -fno-exceptions -fno-rtti -msse4.2 -pthread -lm -m64 -DIS_64BIT -flto -Wall -Wcast-qual -pedantic -Wextra -Wshadow -fstrict-aliasing -Wno-attributes
 
 
 OBJFOLD=obj
@@ -41,3 +41,6 @@ mkfolders: makeobj
 
 makeobj:
 	mkdir -p $(OBJFOLD)
+
+format:
+	find . -maxdepth 1 -name '*.h' -or -name '*.hpp' -or -name '*.cpp' | xargs clang-format -i -style=file $1

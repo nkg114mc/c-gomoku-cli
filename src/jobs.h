@@ -18,6 +18,7 @@
 
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <vector>
 
 // Result for each pair (e1, e2); e1 < e2. Stores count of game outcomes from e1's point
@@ -47,7 +48,7 @@ public:
     bool done();
     void stop();
 
-    void set_name(int ei, const char *name);
+    void set_name(int ei, std::string_view name);
     void print_results(size_t frequency);
 
 public:

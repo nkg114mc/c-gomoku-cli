@@ -20,18 +20,8 @@
 #include <cstdlib>
 #include <string>
 
-template <class T1, class T2> inline auto max(const T1 a, const T2 b)
-{
-    return (a > b) ? a : b;
-}
-
-template <class T1, class T2> inline auto min(const T1 a, const T2 b)
-{
-    return (a < b) ? a : b;
-}
-
-uint64_t prng(uint64_t *state);
-double   prngf(uint64_t *state);
+uint64_t prng(uint64_t &state);
+double   prngf(uint64_t &state);
 
 int64_t system_msec(void);
 void    system_sleep(int64_t msec);

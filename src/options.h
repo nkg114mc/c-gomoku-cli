@@ -35,7 +35,7 @@ struct Options
 {
     std::string  openings, pgn, sgf, msg;
     SampleParams sp;
-    SPRTParam    sprtParam   = {.alpha = 0.05, .beta = 0.05};
+    SPRTParam    sprtParam   = {.elo0 = 0, .elo1 = 0, .alpha = 0.05, .beta = 0.05};
     uint64_t     srand       = 0;
     int          concurrency = 1;
     int          games = 1, rounds = 1;
@@ -43,7 +43,8 @@ struct Options
     int          drawCount = 0, drawScore = 0;
     int          forceDrawAfter = 0;
     int          boardSize      = 15;
-    int          gameRule       = GOMOKU_FIVE_OR_MORE;
+    GameRule     gameRule       = GOMOKU_FIVE_OR_MORE;
+    OpeningType  openingType    = OPENING_OFFSET;
     bool         useTURN        = true;
     bool         log            = false;
     bool         random         = false;
@@ -53,7 +54,6 @@ struct Options
     bool         gauntlet       = false;
     bool         saveLoseOnly   = false;
     bool         debug          = false;
-    OpeningType  openingType    = OPENING_OFFSET;
 };
 
 struct EngineOptions

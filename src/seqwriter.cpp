@@ -36,7 +36,7 @@ SeqWriter::~SeqWriter()
     // write out all records even if not sequential
     write_to_i(buf.size());
 
-    fclose(this->out);
+    fclose(out);
 }
 
 void SeqWriter::push(size_t idx, std::string_view str)

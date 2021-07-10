@@ -45,7 +45,7 @@ Openings::Openings(const char *fileName, bool random, uint64_t srand) : file(nul
             uint64_t seed = srand ? srand : (uint64_t)system_msec();
 
             for (size_t i = index.size() - 1; i > 0; i--) {
-                const size_t j   = prng(&seed) % (i + 1);
+                const size_t j   = prng(seed) % (i + 1);
                 long         tmp = index[i];
                 index[i]         = index[j];
                 index[j]         = tmp;
@@ -63,14 +63,14 @@ Openings::~Openings()
 }
 
 // Returns current round
-size_t Openings::next(std::string &fen, size_t idx, int threadId)
+size_t Openings::next(std::string &opening_str, size_t idx, int threadId)
 {
     if (!file) {
-        fen.clear();
+        opening_str.clear();
         return 0;
     }
 
-    // Read 'fen' from file
+    // Read opening string from file
     std::string line;
 
     {
@@ -79,6 +79,6 @@ size_t Openings::next(std::string &fen, size_t idx, int threadId)
         DIE_IF(threadId, !string_getline(line, file));
     }
 
-    fen = std::move(line);
+    opening_str = std::move(line);
     return idx / index.size();
 }

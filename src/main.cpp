@@ -130,12 +130,11 @@ static void main_init(int argc, const char **argv)
     }
 }
 
-static void thread_start(void *arg)
+static void thread_start(Worker *w)
 {
-    Worker *w          = (Worker *)arg;
-    Engine  engines[2] = {{w, options.debug}, {w, options.debug}};
+    Engine engines[2] = {{w, options.debug}, {w, options.debug}};
 
-    std::string fen, messages;
+    std::string opening_str, messages;
     Job         job   = {};
     int         ei[2] = {-1, -1};  // eo[ei[0]] plays eo[ei[1]]: initialize with invalid
                                    // values to start
@@ -157,7 +156,7 @@ static void thread_start(void *arg)
                                 eo[ei[i]].name.c_str(),
                                 eo[ei[i]].tolerance,
                                 !options.msg.empty() ? &messages : nullptr);
-                jq->set_name(ei[i], engines[i].name.c_str());
+                jq->set_name(ei[i], engines[i].name);
             }
             // Re-init engine if it crashed previously
             else if (engines[i].is_crashed()) {
@@ -170,14 +169,15 @@ static void thread_start(void *arg)
         }
 
         // Choose opening position
-        size_t openingRound = openings->next(fen, options.repeat ? idx / 2 : idx, w->id);
+        size_t openingRound =
+            openings->next(opening_str, options.repeat ? idx / 2 : idx, w->id);
 
         // Play 1 game
-        Game game(job.round, job.game);
-        int  color = BLACK;  // black play first in gomoku/renju by default
+        Game  game(job.round, job.game, w);
+        Color color = BLACK;  // black play first in gomoku/renju by default
 
-        if (!game.load_fen(fen, &color, &options, openingRound)) {
-            DIE("[%d] illegal FEN '%s'\n", w->id, fen.c_str());
+        if (!game.load_opening(opening_str, options, openingRound, color)) {
+            DIE("[%d] illegal OPENING '%s'\n", w->id, opening_str.c_str());
         }
 
         const int blackIdx = color ^ job.reverse;
@@ -196,7 +196,7 @@ static void thread_start(void *arg)
                                engines[whiteIdx].name);
 
         const EngineOptions *eoPair[2] = {&eo[ei[0]], &eo[ei[1]]};
-        const int            wld = game.play(w, &options, engines, eoPair, job.reverse);
+        const int            wld       = game.play(options, engines, eoPair, job.reverse);
 
         if (!options.gauntlet || !options.saveLoseOnly || wld == RESULT_LOSS) {
             // Write to PGN file
@@ -246,7 +246,7 @@ static void thread_start(void *arg)
                n);
 
         // SPRT update
-        if (options.sprt && sprt_done(wldCount, &options.sprtParam)) {
+        if (options.sprt && options.sprtParam.done(wldCount)) {
             jq->stop();
         }
 

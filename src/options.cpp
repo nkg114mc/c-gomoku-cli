@@ -161,7 +161,7 @@ static int options_parse_sprt(int argc, const char **argv, int i, Options &o)
         i++;
     }
 
-    if (!sprt_validate(&o.sprtParam))
+    if (!o.sprtParam.validate())
         DIE("Invalid SPRT parameters\n");
 
     return i - 1;
@@ -270,9 +270,8 @@ void options_parse(int                         argc,
         else if (!strcmp(argv[i], "-sample"))
             i = options_parse_sample(argc, argv, i + 1, o);
         else if (!strcmp(argv[i], "-rule")) {
-            o.gameRule = (GameRule)(atoi(argv[i + 1]));
-            i++;
-            check_rule_code((GameRule)o.gameRule);
+            o.gameRule = (GameRule)atoi(argv[++i]);
+            check_rule_code(o.gameRule);
         }
         else if (!strcmp(argv[i], "-boardsize")) {
             o.boardSize = atoi(argv[i + 1]);

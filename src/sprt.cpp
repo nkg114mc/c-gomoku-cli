@@ -40,17 +40,16 @@ static double sprt_llr(int wldCount[NB_RESULT], double elo0, double elo1)
     return (s1 - s0) * (2 * s - s0 - s1) / (2 * var / n);
 }
 
-bool sprt_validate(const SPRTParam *sp)
+bool SPRTParam::validate() const
 {
-    return 0 < sp->alpha && sp->alpha < 1 && 0 < sp->beta && sp->beta < 1
-           && sp->elo0 < sp->elo1;
+    return 0 < alpha && alpha < 1 && 0 < beta && beta < 1 && elo0 < elo1;
 }
 
-bool sprt_done(int wldCount[NB_RESULT], const SPRTParam *sp)
+bool SPRTParam::done(int wldCount[NB_RESULT]) const
 {
-    const double lbound = log(sp->beta / (1 - sp->alpha));
-    const double ubound = log((1 - sp->beta) / sp->alpha);
-    const double llr    = sprt_llr(wldCount, sp->elo0, sp->elo1);
+    const double lbound = log(beta / (1 - alpha));
+    const double ubound = log((1 - beta) / alpha);
+    const double llr    = sprt_llr(wldCount, elo0, elo1);
 
     if (llr > ubound) {
         printf("SPRT: LLR = %.3f [%.3f,%.3f]. H1 accepted.\n", llr, lbound, ubound);

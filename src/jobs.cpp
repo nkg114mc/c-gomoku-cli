@@ -86,9 +86,9 @@ bool JobQueue::pop(Job &j, size_t &idx_in, size_t &count)
 {
     std::lock_guard lock(mtx);
 
-    if (this->idx < jobs.size()) {
-        j      = this->jobs[this->idx];
-        idx_in = this->idx++;
+    if (idx < jobs.size()) {
+        j      = jobs[idx];
+        idx_in = idx++;
         count  = jobs.size();
         return true;
     }
@@ -122,7 +122,7 @@ void JobQueue::stop()
     idx = jobs.size();
 }
 
-void JobQueue::set_name(int ei, const char *name)
+void JobQueue::set_name(int ei, std::string_view name)
 {
     std::lock_guard lock(mtx);
 

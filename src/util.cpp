@@ -25,23 +25,23 @@
 #include "util.h"
 
 // SplitMix64 PRNG, based on http://xoroshiro.di.unimi.it/splitmix64.c
-uint64_t prng(uint64_t *state)
+uint64_t prng(uint64_t &state)
 {
-    uint64_t rnd = (*state += 0x9E3779B97F4A7C15);
+    uint64_t rnd = (state += 0x9E3779B97F4A7C15);
     rnd          = (rnd ^ (rnd >> 30)) * 0xBF58476D1CE4E5B9;
     rnd          = (rnd ^ (rnd >> 27)) * 0x94D049BB133111EB;
     rnd ^= rnd >> 31;
     return rnd;
 }
 
-double prngf(uint64_t *state)
+double prngf(uint64_t &state)
 {
     return (prng(state) >> 11) * 0x1.0p-53;
 }
 
 int64_t system_msec()
 {
-    struct timespec t = {0};
+    struct timespec t = {};
     clock_gettime(CLOCK_MONOTONIC, &t);
     return t.tv_sec * 1000LL + t.tv_nsec / 1000000;
 }

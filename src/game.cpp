@@ -26,28 +26,32 @@
 #include <iostream>
 #include <string>
 
-Game::Game(int rd, int gm)
+Game::Game(int rd, int gm, Worker *worker)
     : game_rule()
     , round(rd)
     , game(gm)
     , ply()
     , state()
     , board_size()
+    , w(worker)
 {}
 
-bool Game::load_fen(std::string_view fen, int *color, const Options *o, size_t curRound)
+bool Game::load_opening(std::string_view opening_str,
+                        const Options &  o,
+                        size_t           currentRound,
+                        Color &          color)
 {
-    pos.emplace_back(o->boardSize);
+    pos.emplace_back(o.boardSize);
 
-    if (pos[0].apply_opening(fen, o->openingType)) {
-        *color = pos[0].get_turn();
+    if (pos[0].apply_opening(opening_str, o.openingType)) {
+        color = pos[0].get_turn();
     }
     else {
         return false;
     }
 
-    if (o->transform) {
-        TransformType transType = (TransformType)(curRound % NB_TRANS);
+    if (o.transform) {
+        TransformType transType = (TransformType)(currentRound % NB_TRANS);
         pos[0].transform(transType);
     }
 
@@ -77,55 +81,55 @@ int Game::game_apply_rules(move_t lastmove)
     return STATE_NONE;
 }
 
-void Game::gomocup_turn_info_command(const EngineOptions *eo,
-                                     const int64_t        timeLeft,
-                                     Engine *             engine)
+void Game::gomocup_turn_info_command([[maybe_unused]] const EngineOptions &eo,
+                                     const int64_t                         timeLeft,
+                                     Engine &                              engine)
 {
-    engine->writeln(format("INFO time_left %" PRId64, timeLeft).c_str());
+    engine.writeln(format("INFO time_left %" PRId64, timeLeft).c_str());
 }
 
-void Game::gomocup_game_info_command(const EngineOptions *eo,
-                                     const Options *      option,
-                                     Engine *             engine)
+void Game::gomocup_game_info_command(const EngineOptions &eo,
+                                     const Options &      option,
+                                     Engine &             engine)
 {
     // game info
-    engine->writeln(format("INFO rule %i", option->gameRule).c_str());
+    engine.writeln(format("INFO rule %i", option.gameRule).c_str());
 
     // time control info
-    if (eo->timeoutTurn)
-        engine->writeln(format("INFO timeout_turn %" PRId64, eo->timeoutTurn).c_str());
+    if (eo.timeoutTurn)
+        engine.writeln(format("INFO timeout_turn %" PRId64, eo.timeoutTurn).c_str());
 
     // always send match timeout info (0 means no limit in match time)
-    engine->writeln(format("INFO timeout_match %" PRId64, eo->timeoutMatch).c_str());
+    engine.writeln(format("INFO timeout_match %" PRId64, eo.timeoutMatch).c_str());
 
-    if (eo->depth)
-        engine->writeln(format("INFO max_depth %i", eo->depth).c_str());
+    if (eo.depth)
+        engine.writeln(format("INFO max_depth %i", eo.depth).c_str());
 
-    if (eo->nodes)
-        engine->writeln(format("INFO max_node %" PRId64, eo->nodes).c_str());
+    if (eo.nodes)
+        engine.writeln(format("INFO max_node %" PRId64, eo.nodes).c_str());
 
     // memory limit info
-    engine->writeln(format("INFO max_memory %" PRId64, eo->maxMemory).c_str());
+    engine.writeln(format("INFO max_memory %" PRId64, eo.maxMemory).c_str());
 
     // multi threading info
-    if (eo->numThreads > 1)
-        engine->writeln(format("INFO thread_num %i", eo->numThreads).c_str());
+    if (eo.numThreads > 1)
+        engine.writeln(format("INFO thread_num %i", eo.numThreads).c_str());
 
     // custom info
     std::string left, right;
-    for (size_t i = 0; i < eo->options.size(); i++) {
-        string_tok(right, string_tok(left, eo->options[i].c_str(), "="), "=");
+    for (size_t i = 0; i < eo.options.size(); i++) {
+        string_tok(right, string_tok(left, eo.options[i].c_str(), "="), "=");
 
-        engine->writeln(format("INFO %s %s", left, right).c_str());
+        engine.writeln(format("INFO %s %s", left, right).c_str());
     }
 }
 
-void Game::send_board_command(const Position *pos, Worker *w, Engine *engine)
+void Game::send_board_command(const Position &position, Engine &engine)
 {
-    engine->writeln("BOARD");
+    engine.writeln("BOARD");
 
-    int           moveCnt   = pos->get_move_count();
-    const move_t *histMoves = pos->get_hist_moves();
+    int           moveCnt   = position.get_move_count();
+    const move_t *histMoves = position.get_hist_moves();
 
     // make sure last color is 2 according to piskvork protocol
     auto colorToGomocupStoneIdx = [lastColor = ColorFromMove(histMoves[moveCnt - 1])](
@@ -136,27 +140,25 @@ void Game::send_board_command(const Position *pos, Worker *w, Engine *engine)
         int   gomocupColorIdx = colorToGomocupStoneIdx(color);
         Pos   p               = PosFromMove(histMoves[i]);
 
-        engine->writeln(
-            format("%i,%i,%i", CoordX(p), CoordY(p), gomocupColorIdx).c_str());
+        engine.writeln(format("%i,%i,%i", CoordX(p), CoordY(p), gomocupColorIdx).c_str());
     }
 
-    engine->writeln("DONE");
+    engine.writeln("DONE");
 }
 
-void Game::compute_time_left(const EngineOptions *eo, int64_t *timeLeft)
+void Game::compute_time_left(const EngineOptions &eo, int64_t &timeLeft)
 {
-    if (eo->timeoutMatch > 0) {
+    if (eo.timeoutMatch > 0) {
         // add increment to time left if increment is set
-        if (eo->increment > 0)
-            *timeLeft += eo->increment;
+        if (eo.increment > 0)
+            timeLeft += eo.increment;
     }
     else {
-        *timeLeft = 2147483647LL;
+        timeLeft = 2147483647LL;
     }
 }
 
-int Game::play(Worker *             w,
-               const Options *      o,
+int Game::play(const Options &      o,
                Engine               engines[2],
                const EngineOptions *eo[2],
                bool                 reverse)
@@ -167,8 +169,8 @@ int Game::play(Worker *             w,
 // - returns RESULT_LOSS/DRAW/WIN from engines[0] pov
 {
     // initialize game rule
-    this->game_rule  = (GameRule)(o->gameRule);
-    this->board_size = o->boardSize;
+    this->game_rule  = (GameRule)(o.gameRule);
+    this->board_size = o.boardSize;
 
     for (int color = BLACK; color <= WHITE; color++) {
         names[color] = engines[color ^ pos[0].get_turn() ^ reverse].name;
@@ -176,18 +178,18 @@ int Game::play(Worker *             w,
 
     for (int i = 0; i < 2; i++) {
         // tell engine to start a new game
-        engines[i].writeln(format("START %i", o->boardSize).c_str());
+        engines[i].writeln(format("START %i", o.boardSize).c_str());
         engines[i].wait_for_ok();
 
         // send game info
-        gomocup_game_info_command(eo[i], o, &engines[i]);
+        gomocup_game_info_command(*eo[i], o, engines[i]);
     }
 
     move_t  played                = NONE_MOVE;
     int     drawPlyCount          = 0;
-    int     resignCount[NB_COLOR] = {0};
+    int     resignCount[NB_COLOR] = {0, 0};
     int     ei                    = reverse;     // engines[ei] has the move
-    int64_t timeLeft[2]           = {0LL, 0LL};  //{eo[0]->time, eo[1]->time};
+    int64_t timeLeft[2]           = {0LL, 0LL};  // {eo[0]->time, eo[1]->time};
     bool    canUseTurn[2]         = {false, false};
 
     // init time control
@@ -201,7 +203,7 @@ int Game::play(Worker *             w,
             Position::pos_move_with_copy(&pos[ply], &pos[ply - 1], played);
         }
 
-        if (o->debug) {
+        if (o.debug) {
             pos[ply].pos_print();
         }
 
@@ -211,16 +213,16 @@ int Game::play(Worker *             w,
         }
 
         // Apply force draw adjudication rule
-        if (o->forceDrawAfter && pos[ply].get_move_count() >= o->forceDrawAfter) {
+        if (o.forceDrawAfter && pos[ply].get_move_count() >= o.forceDrawAfter) {
             state = STATE_DRAW_ADJUDICATION;
             break;
         }
 
         // Prepare timeLeft[ei]
-        compute_time_left(eo[ei], &(timeLeft[ei]));
+        compute_time_left(*eo[ei], timeLeft[ei]);
 
         // output game/turn info
-        gomocup_turn_info_command(eo[ei], timeLeft[ei], &engines[ei]);
+        gomocup_turn_info_command(*eo[ei], timeLeft[ei], engines[ei]);
 
         // trigger think!
         if (pos[ply].get_move_count() == 0) {
@@ -228,19 +230,19 @@ int Game::play(Worker *             w,
             canUseTurn[ei] = true;
         }
         else {
-            if (o->useTURN && canUseTurn[ei]) {  // use TURN to trigger think
+            if (o.useTURN && canUseTurn[ei]) {  // use TURN to trigger think
                 engines[ei].writeln(
                     format("TURN %s", pos[ply].move_to_gomostr(played)).c_str());
             }
             else {  // use BOARD to trigger think
-                send_board_command(&(pos[ply]), w, &(engines[ei]));
+                send_board_command(pos[ply], engines[ei]);
                 canUseTurn[ei] = true;
             }
         }
 
         std::string bestmove;
-        Info        moveInfo {};
-        const bool  ok = engines[ei].bestmove(timeLeft[ei],
+        Info        moveInfo = {};
+        const bool  ok       = engines[ei].bestmove(timeLeft[ei],
                                              eo[ei]->timeoutTurn,
                                              bestmove,
                                              moveInfo,
@@ -285,8 +287,8 @@ int Game::play(Worker *             w,
         }
 
         // Apply draw adjudication rule
-        if (o->drawCount && abs(moveInfo.score) <= o->drawScore) {
-            if (++drawPlyCount >= 2 * o->drawCount) {
+        if (o.drawCount && abs(moveInfo.score) <= o.drawScore) {
+            if (++drawPlyCount >= 2 * o.drawCount) {
                 state = STATE_DRAW_ADJUDICATION;
                 break;
             }
@@ -296,8 +298,8 @@ int Game::play(Worker *             w,
         }
 
         // Apply resign rule
-        if (o->resignCount && moveInfo.score <= -o->resignScore) {
-            if (++resignCount[ei] >= o->resignCount) {
+        if (o.resignCount && moveInfo.score <= -o.resignScore) {
+            if (++resignCount[ei] >= o.resignCount) {
                 state = STATE_RESIGN;
                 break;
             }
@@ -307,7 +309,7 @@ int Game::play(Worker *             w,
         }
 
         // Write sample: position (compactly encoded) + move
-        if (!o->sp.fileName.empty() && prngf(&w->seed) <= o->sp.freq) {
+        if (!o.sp.fileName.empty() && prngf(w->seed) <= o.sp.freq) {
             Sample sample = {
                 .pos    = pos[ply],
                 .move   = played,
@@ -431,7 +433,7 @@ std::string Game::export_pgn(size_t gameIdx, int verbosity) const
         const std::string dummyMovesStr2 =
             "1. d4 Nf6 2. c4 e6 3. Nf3 d5 4. Nc3 Bb4 5. Bg5";
 
-        out += format("%s ", (this->ply) % 2 == 0 ? dummyMovesStr1 : dummyMovesStr2);
+        out += format("%s ", ply % 2 == 0 ? dummyMovesStr1 : dummyMovesStr2);
     }
 
     out += result;

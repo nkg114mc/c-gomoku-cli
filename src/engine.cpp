@@ -428,9 +428,8 @@ bool Engine::bestmove(int64_t &    timeLeft,
         timeLeft          = matchTimeLimit - now;
         turnTimeLeft      = turnTimeLimit - now;
 
-        if (this->isDebug) {
+        if (isDebug)
             process_message_ifneeded(line.c_str());
-        }
 
         if (const char *tail = string_prefix(line.c_str(), "MESSAGE")) {
             // record engine messages
@@ -458,7 +457,7 @@ bool Engine::bestmove(int64_t &    timeLeft,
             if (!readln(line))
                 goto Exit;
 
-            if (this->isDebug)
+            if (isDebug)
                 process_message_ifneeded(line.c_str());
 
             if (const char *tail = string_prefix(line.c_str(), "MESSAGE")) {
