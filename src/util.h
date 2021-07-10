@@ -54,11 +54,11 @@ void    system_sleep(int64_t msec);
     #define FOPEN_APPEND_MODE        "ae"
     #define FOPEN_APPEND_BINARY_MODE "ae"
 #else
-    #define FOPEN_READ_MODE          "r"
-    #define FOPEN_WRITE_MODE         "w"
-    #define FOPEN_WRITE_BINARY_MODE  "wb"
-    #define FOPEN_APPEND_MODE        "a"
-    #define FOPEN_APPEND_BINARY_MODE "ab"
+    #define FOPEN_READ_MODE          "rN"
+    #define FOPEN_WRITE_MODE         "wN"
+    #define FOPEN_WRITE_BINARY_MODE  "wbN"
+    #define FOPEN_APPEND_MODE        "aN"
+    #define FOPEN_APPEND_BINARY_MODE "abN"
 #endif
 
 /**
