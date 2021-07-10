@@ -53,6 +53,7 @@ struct Options
     bool         sprt           = false;
     bool         gauntlet       = false;
     bool         saveLoseOnly   = false;
+    bool         fatalError     = false;
     bool         debug          = false;
 };
 

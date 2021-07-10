@@ -132,11 +132,11 @@ static void main_init(int argc, const char **argv)
 
 static void thread_start(Worker *w)
 {
-    Engine engines[2] = {{w, options.debug}, {w, options.debug}};
-
     std::string opening_str, messages;
     Job         job   = {};
-    int         ei[2] = {-1, -1};  // eo[ei[0]] plays eo[ei[1]]: initialize with invalid
+    Engine engines[2] = {{w, options.debug, !options.msg.empty() ? &messages : nullptr},
+                         {w, options.debug, !options.msg.empty() ? &messages : nullptr}};
+    int    ei[2]      = {-1, -1};  // eo[ei[0]] plays eo[ei[1]]: initialize with invalid
                                    // values to start
     size_t idx = 0, count = 0;     // game idx and count (shared across workers)
 
@@ -151,20 +151,18 @@ static void thread_start(Worker *w)
         for (int i = 0; i < 2; i++) {
             if (job.ei[i] != ei[i]) {
                 ei[i] = job.ei[i];
-                engines[i].destroy();
-                engines[i].init(eo[ei[i]].cmd.c_str(),
-                                eo[ei[i]].name.c_str(),
-                                eo[ei[i]].tolerance,
-                                !options.msg.empty() ? &messages : nullptr);
+                engines[i].terminate();
+                engines[i].start(eo[ei[i]].cmd.c_str(),
+                                 eo[ei[i]].name.c_str(),
+                                 eo[ei[i]].tolerance);
                 jq->set_name(ei[i], engines[i].name);
             }
-            // Re-init engine if it crashed previously
-            else if (engines[i].is_crashed()) {
-                engines[i].destroy();
-                engines[i].init(eo[ei[i]].cmd.c_str(),
-                                eo[ei[i]].name.c_str(),
-                                eo[ei[i]].tolerance,
-                                !options.msg.empty() ? &messages : nullptr);
+            // Re-init engine if it crashed/timeout previously
+            else if (!engines[i].is_ok() || engines[i].is_crashed()) {
+                engines[i].terminate();
+                engines[i].start(eo[ei[i]].cmd.c_str(),
+                                 eo[ei[i]].name.c_str(),
+                                 eo[ei[i]].tolerance);
             }
         }
 
@@ -257,7 +255,7 @@ static void thread_start(Worker *w)
     }
 
     for (int i = 0; i < 2; i++) {
-        engines[i].destroy();
+        engines[i].terminate();
     }
 }
 

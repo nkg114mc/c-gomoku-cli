@@ -32,6 +32,13 @@ void    system_sleep(int64_t msec);
         exit(EXIT_FAILURE);           \
     } while (0)
 
+#define DIE_OR_ERR(die, ...)          \
+    do {                              \
+        fprintf(stderr, __VA_ARGS__); \
+        if (die)                      \
+            exit(EXIT_FAILURE);       \
+    } while (0)
+
 [[noreturn]] void die_errno(const int threadId, const char *fileName, int line);
 
 #define DIE_IF(id, v)                          \

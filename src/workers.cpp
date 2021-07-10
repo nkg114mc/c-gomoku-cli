@@ -87,3 +87,9 @@ int64_t Worker::deadline_overdue()
     else
         return 0;
 }
+
+void Worker::wait_callback_done()
+{
+    deadline.mtx.lock();
+    deadline.mtx.unlock();
+}

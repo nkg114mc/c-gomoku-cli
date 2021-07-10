@@ -39,24 +39,25 @@ class Engine
 public:
     std::string name;
 
-    Engine(Worker *worker, bool debug);
-    Engine(const Engine &) = delete;
+    Engine(Worker *worker, bool debug, std::string *outmsg);
+    Engine(const Engine &) = delete;  // disable copy
     ~Engine();
 
-    void init(const char *cmd, const char *name, int64_t tolerance, std::string *outmsg);
-    void destroy();
+    void start(const char *cmd, const char *name, int64_t tolerance);
+    void terminate(bool force = false);
 
     bool readln(std::string &line);
     void writeln(const char *buf);
 
-    void wait_for_ok();
+    bool wait_for_ok(bool fatalError);
     bool bestmove(int64_t &    timeLeft,
                   int64_t      maxTurnTime,
                   std::string &best,
                   Info &       info,
                   int          moveply);
 
-    bool is_crashed() const;
+    bool is_ok() const { return pid != 0; }
+    bool is_crashed() const { return pid && (!in || !out); }
 
 private:
     Worker *const w;

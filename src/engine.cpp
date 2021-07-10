@@ -46,12 +46,16 @@
 #include <sstream>
 #include <vector>
 
-Engine::Engine(Worker *worker, bool debug) : w(worker), isDebug(debug), pid(0) {}
+Engine::Engine(Worker *worker, bool debug, std::string *outmsg)
+    : w(worker)
+    , isDebug(debug)
+    , pid(0)
+    , messages(outmsg)
+{}
 
 Engine::~Engine()
 {
-    if (pid)
-        destroy();
+    terminate();
 }
 
 void Engine::spawn(const char *cwd, const char *run, const char **argv, bool readStdErr)
@@ -270,17 +274,13 @@ static void engine_parse_cmd(const char *              cmd,
         args.push_back(token);
 }
 
-void Engine::init(const char * cmd,
-                  const char * engine_name,
-                  int64_t      engine_tolerance,
-                  std::string *outmsg)
+void Engine::start(const char *cmd, const char *engine_name, int64_t engine_tolerance)
 {
     if (!*cmd)
         DIE("[%d] missing command to start engine.\n", w->id);
 
     this->name      = engine_name;
     this->tolerance = engine_tolerance;
-    this->messages  = outmsg;
 
     // Parse cmd into (cwd, run, args): we want to execute run from cwd with args.
     std::string              cwd, run;
@@ -305,51 +305,70 @@ void Engine::init(const char * cmd,
     parse_about(cmd);
 }
 
-void Engine::destroy()
+void Engine::terminate(bool force)
 {
-    // Engine was not instanciated with init()
+    // Engine was not instanciated with start()
     if (!pid)
         return;
 
-    // Order the engine to quit, and grant (tolerance) deadline for obeying
-    w->deadline_set(name.c_str(), system_msec() + tolerance, "exit");
-    writeln("END");
+    if (!force) {
+        // Order the engine to quit, and grant (tolerance) deadline for obeying
+        w->deadline_set(name.c_str(), system_msec() + tolerance, "exit");
+        writeln("END");
+    }
 
 #ifdef __MINGW32__
     // On windows, wait for (tolerance-200) milliseconds, then force
     // terminate child process if it fails to exit in time
-    DWORD result = WaitForSingleObject(hProcess, std::max<int64_t>(tolerance - 200, 0));
+    int64_t waitTime = force ? 0 : std::max<int64_t>(tolerance - 200, 0);
+    DWORD   result   = WaitForSingleObject(hProcess, waitTime);
     DIE_IF(w->id, result == WAIT_FAILED);
     if (result == WAIT_TIMEOUT)
         DIE_IF(w->id, !TerminateProcess(hProcess, 0));
     DIE_IF(w->id, !CloseHandle(hProcess));
 #else
-    // On unix/linux, wait until deadline
-    waitpid(pid, NULL, 0);
+    if (force) {
+        if (waitpid(pid, NULL, WNOHANG) == 0)
+            DIE_IF(w->id, kill(pid, SIGTERM) < 0);
+    }
+    else {
+        // On unix/linux, wait until deadline
+        waitpid(pid, NULL, 0);
+    }
 #endif
 
-    w->deadline_clear();
+    if (!force)
+        w->deadline_clear();
 
     if (in)
         DIE_IF(w->id, fclose(in) < 0);
     if (out)
         DIE_IF(w->id, fclose(out) < 0);
 
-    // Reset pid to zero
+    // Reset pid, in, out
     pid = 0;
+    in = out = nullptr;
 }
 
+// returns false when engine timeout or crash, and after that
+// is_crashed() can be used to check if the engine has crashed
 bool Engine::readln(std::string &line)
 {
     if (!in)  // Check if engine has crashed
         return false;
 
     if (!string_getline(line, in)) {
+        // When timeout, main thread will terminate the engine subprocess by force
+        // We wait for main thread to complete the termination callback
+        w->wait_callback_done();
+
         // Pipe returning EOF means engine crashed
         // Instead of dying instantly, close pipe to flag engine died and return false
-        DIE_IF(w->id, fclose(in) < 0);
-        DIE_IF(w->id, fclose(out) < 0);
-        in = out = nullptr;
+        if (pid) {  // If it is terminated by timeout, process is already closed
+            DIE_IF(w->id, fclose(in) < 0);
+            DIE_IF(w->id, fclose(out) < 0);
+            in = out = nullptr;
+        }
         return false;
     }
 
@@ -381,20 +400,36 @@ void Engine::writeln(const char *buf)
     }
 }
 
-void Engine::wait_for_ok()
+bool Engine::wait_for_ok(bool fatalError)
 {
-    w->deadline_set(name.c_str(), system_msec() + tolerance, "start");
     std::string line;
+    w->deadline_set(name.c_str(), system_msec() + tolerance, "start", [=] {
+        if (!fatalError)
+            terminate(true);
+    });
 
     do {
-        if (!readln(line))
-            DIE("[%d] engine %s exited before answering START\n", w->id, name.c_str());
+        if (!readln(line)) {
+            DIE_OR_ERR(fatalError,
+                       "[%d] engine %s %s before answering START\n",
+                       w->id,
+                       name.c_str(),
+                       is_crashed() ? "crashed" : "timeout");
+            break;
+        }
 
-        if (const char *tail = string_prefix(line.c_str(), "ERROR"))  // an ERROR
-            DIE("[%d] engine %s output error:%s\n", w->id, name.c_str(), tail);
+        if (const char *tail = string_prefix(line.c_str(), "ERROR")) {  // an ERROR
+            DIE_OR_ERR(fatalError,
+                       "[%d] engine %s output error:%s\n",
+                       w->id,
+                       name.c_str(),
+                       tail);
+            break;
+        }
     } while (line != "OK");
 
     w->deadline_clear();
+    return line == "OK";
 }
 
 bool Engine::bestmove(int64_t &    timeLeft,
@@ -403,9 +438,6 @@ bool Engine::bestmove(int64_t &    timeLeft,
                       Info &       info,
                       int          moveply)
 {
-    int         result = false;
-    std::string line;
-
     const int64_t start          = system_msec();
     const int64_t matchTimeLimit = start + timeLeft;
     int64_t       turnTimeLimit  = matchTimeLimit;
@@ -416,8 +448,12 @@ bool Engine::bestmove(int64_t &    timeLeft,
         turnTimeLeft  = std::min(timeLeft, maxTurnTime);
     }
 
-    w->deadline_set(name.c_str(), turnTimeLimit + tolerance, "move");
-    int64_t moveOverhead = std::min<int64_t>(tolerance / 2, 1000);
+    w->deadline_set(name.c_str(), turnTimeLimit + tolerance, "move", [=] {
+        terminate(true);
+    });
+    int64_t     moveOverhead = std::min<int64_t>(tolerance / 2, 1000);
+    bool        result       = false;
+    std::string line;
 
     while ((turnTimeLeft + moveOverhead) >= 0 && !result) {
         if (!readln(line))
@@ -451,7 +487,7 @@ bool Engine::bestmove(int64_t &    timeLeft,
         writeln("YXSTOP");
 
         // For turn timeout, explicitly mark time left as negetive
-        timeLeft = std::min(timeLeft, INT64_MIN);
+        timeLeft = INT64_MIN;
 
         do {
             if (!readln(line))
@@ -474,11 +510,6 @@ bool Engine::bestmove(int64_t &    timeLeft,
 Exit:
     w->deadline_clear();
     return result;
-}
-
-bool Engine::is_crashed() const
-{
-    return !in || !out;
 }
 
 static void parse_and_display_engine_about(const Worker *   w,
@@ -560,8 +591,9 @@ void Engine::parse_about(const char *fallbackName)
     writeln("ABOUT");
 
     std::string line;
-    if (!readln(line))
+    if (!readln(line)) {
         DIE("[%d] engine %s exited before answering ABOUT\n", w->id, name.c_str());
+    }
 
     w->deadline_clear();
 

@@ -284,9 +284,10 @@ void options_parse(int                         argc,
             o.debug = true;
             o.log   = true;  // enable log if debug is enabled
         }
-        else if (!strcmp(argv[i], "-sendbyboard")) {
+        else if (!strcmp(argv[i], "-sendbyboard"))
             o.useTURN = false;
-        }
+        else if (!strcmp(argv[i], "-fatalerror"))
+            o.fatalError = true;
         else {
             DIE("Unknown option '%s'\n", argv[i]);
         }
@@ -377,6 +378,7 @@ void options_print(const Options &o, const std::vector<EngineOptions> &eo)
     std::cout << "drawCount = " << o.drawCount << std::endl;
     std::cout << "drawScore = " << o.drawScore << std::endl;
     std::cout << "drawAfter = " << o.forceDrawAfter << std::endl;
+    std::cout << "fatalerror = " << o.fatalError << std::endl;
     std::cout << "debug = " << o.debug << std::endl;
     std::cout << std::endl;
 

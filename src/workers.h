@@ -54,4 +54,5 @@ public:
     void    deadline_clear();
     void    deadline_callback_once();
     int64_t deadline_overdue();
+    void    wait_callback_done();
 };

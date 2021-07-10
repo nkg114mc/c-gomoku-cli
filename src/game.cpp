@@ -168,6 +168,13 @@ int Game::play(const Options &      o,
 // - sets state value: see enum STATE_* codes
 // - returns RESULT_LOSS/DRAW/WIN from engines[0] pov
 {
+    move_t  played                = NONE_MOVE;
+    int     drawPlyCount          = 0;
+    int     resignCount[NB_COLOR] = {0, 0};
+    int     ei                    = reverse;     // engines[ei] has the move
+    int64_t timeLeft[2]           = {0LL, 0LL};  // {eo[0]->time, eo[1]->time};
+    bool    canUseTurn[2]         = {false, false};
+
     // initialize game rule
     this->game_rule  = (GameRule)(o.gameRule);
     this->board_size = o.boardSize;
@@ -176,21 +183,19 @@ int Game::play(const Options &      o,
         names[color] = engines[color ^ pos[0].get_turn() ^ reverse].name;
     }
 
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 2; ei = (1 - ei), i++) {
         // tell engine to start a new game
         engines[i].writeln(format("START %i", o.boardSize).c_str());
-        engines[i].wait_for_ok();
+
+        // wait for engine to answer OK
+        if (!engines[i].wait_for_ok(o.fatalError)) {
+            state = engines[i].is_crashed() ? STATE_CRASHED : STATE_TIME_LOSS;
+            return ei == 0 ? RESULT_LOSS : RESULT_WIN;
+        }
 
         // send game info
         gomocup_game_info_command(*eo[i], o, engines[i]);
     }
-
-    move_t  played                = NONE_MOVE;
-    int     drawPlyCount          = 0;
-    int     resignCount[NB_COLOR] = {0, 0};
-    int     ei                    = reverse;     // engines[ei] has the move
-    int64_t timeLeft[2]           = {0LL, 0LL};  // {eo[0]->time, eo[1]->time};
-    bool    canUseTurn[2]         = {false, false};
 
     // init time control
     timeLeft[0] = eo[0]->timeoutMatch;
@@ -249,21 +254,23 @@ int Game::play(const Options &      o,
                                              pos[ply].get_move_count() + 1);
         this->info.push_back(moveInfo);
 
-        if (!ok) {  // engine crashed in bestmove()
-            std::printf("[%d] engine %s crashed at %d moves after opening\n",
-                        w->id,
-                        engines[ei].name.c_str(),
-                        ply);
-            state = STATE_CRASHED;
+        if (!ok) {  // engine crashed/hard timeout in bestmove()
+            DIE_OR_ERR(o.fatalError,
+                       "[%d] engine %s %s at %d moves after opening\n",
+                       w->id,
+                       engines[ei].name.c_str(),
+                       engines[ei].is_crashed() ? "crashed" : "timeout",
+                       ply);
+            state = engines[ei].is_crashed() ? STATE_CRASHED : STATE_TIME_LOSS;
             break;
         }
 
         if ((eo[ei]->timeoutTurn || eo[ei]->timeoutMatch || eo[ei]->increment)
-            && timeLeft[ei] < 0) {
-            std::printf("[%d] engine %s timeout at %d moves after opening\n",
-                        w->id,
-                        engines[ei].name.c_str(),
-                        ply);
+            && timeLeft[ei] < 0) {  // engine soft timeout in bestmove()
+            printf("[%d] engine %s timeout at %d moves after opening\n",
+                   w->id,
+                   engines[ei].name.c_str(),
+                   ply);
             state = STATE_TIME_LOSS;
             break;
         }
@@ -271,12 +278,11 @@ int Game::play(const Options &      o,
         played = pos[ply].gomostr_to_move(bestmove);
 
         if (!pos[ply].is_legal_move(played)) {
-            std::printf(
-                "[%d] engine %s output illegal move at %d moves after opening: %s\n",
-                w->id,
-                engines[ei].name.c_str(),
-                ply,
-                bestmove.c_str());
+            printf("[%d] engine %s output illegal move at %d moves after opening: %s\n",
+                   w->id,
+                   engines[ei].name.c_str(),
+                   ply,
+                   bestmove.c_str());
             state = STATE_ILLEGAL_MOVE;
             break;
         }
