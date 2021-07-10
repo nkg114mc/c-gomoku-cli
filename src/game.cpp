@@ -587,20 +587,10 @@ void Game::export_samples_bin(FILE *out, LZ4F_compressionContext_t lz4Ctx) const
 
 void Game::export_samples(FILE *out, bool bin, LZ4F_compressionContext_t lz4Ctx) const
 {
-#ifdef __MINGW32__
-    _lock_file(out);
-#else
-    flockfile(out);
-#endif
+    FileLock fl(out);
 
     if (bin)
         export_samples_bin(out, lz4Ctx);
     else
         export_samples_csv(out);
-
-#ifdef __MINGW32__
-    _unlock_file(out);
-#else
-    funlockfile(out);
-#endif
 }

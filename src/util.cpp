@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cerrno>
+#include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #ifdef __MINGW32__
@@ -53,6 +54,24 @@ void system_sleep(int64_t msec)
     nanosleep(&t, NULL);
 }
 
+FileLock::FileLock(FILE *file) : f(file)
+{
+#ifdef __MINGW32__
+    _lock_file(f);
+#else
+    flockfile(f);
+#endif
+}
+
+FileLock::~FileLock()
+{
+#ifdef __MINGW32__
+    _unlock_file(f);
+#else
+    funlockfile(f);
+#endif
+}
+
 [[noreturn]] void die_errno(const int threadId, const char *fileName, int line)
 {
 #ifdef __MINGW32__
@@ -66,6 +85,8 @@ void system_sleep(int64_t msec)
                        buf,
                        (sizeof(buf) / sizeof(wchar_t)),
                        NULL);
+
+        FileLock fl(stdout);
         fprintf(stderr,
                 "[%d] error in %s: (%d). %s (code %d)\n",
                 threadId,
@@ -77,6 +98,7 @@ void system_sleep(int64_t msec)
     }
 #endif
 
+    FileLock fl(stdout);
     fprintf(stderr,
             "[%d] error in %s: (%d). %s\n",
             threadId,
@@ -92,11 +114,7 @@ size_t string_getline(std::string &out, FILE *in)
     out.clear();
     int c;
 
-#ifdef __MINGW32__
-    _lock_file(in);
-#else
-    flockfile(in);
-#endif
+    FileLock fl(in);
 
     while (true) {
 #ifdef __MINGW32__
@@ -110,12 +128,6 @@ size_t string_getline(std::string &out, FILE *in)
         else
             break;
     }
-
-#ifdef __MINGW32__
-    _unlock_file(in);
-#else
-    funlockfile(in);
-#endif
 
     return out.size() + (c == '\n');
 }

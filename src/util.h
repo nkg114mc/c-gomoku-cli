@@ -26,14 +26,24 @@ double   prngf(uint64_t &state);
 int64_t system_msec(void);
 void    system_sleep(int64_t msec);
 
+struct FileLock
+{
+    FILE *f;
+
+    FileLock(FILE *file);
+    ~FileLock();
+};
+
 #define DIE(...)                      \
     do {                              \
+        FileLock fl(stdout);          \
         fprintf(stderr, __VA_ARGS__); \
         exit(EXIT_FAILURE);           \
     } while (0)
 
 #define DIE_OR_ERR(die, ...)          \
     do {                              \
+        FileLock fl(stdout);          \
         fprintf(stderr, __VA_ARGS__); \
         if (die)                      \
             exit(EXIT_FAILURE);       \

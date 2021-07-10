@@ -147,18 +147,23 @@ void Engine::spawn(const char *cwd, const char *run, const char **argv, bool rea
 
         const int flag = CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS;
         // FIXME: fullrun, fullcmd, cwd conversion to LPCWSTR
-        DIE_IF(w->id,
-               !CreateProcess(fullrun,       // application name
-                              fullcmd,       // command line (non-const)
-                              NULL,          // process security attributes
-                              NULL,          // primary thread security attributes
-                              TRUE,          // handles are inherited
-                              flag,          // creation flags
-                              NULL,          // use parent's environment
-                              cwd,           // child process's current directory
-                              &siStartInfo,  // STARTUPINFO pointer
-                              &piProcInfo    // receives PROCESS_INFORMATION
-                              ));
+        if (!CreateProcess(fullrun,       // application name
+                           fullcmd,       // command line (non-const)
+                           NULL,          // process security attributes
+                           NULL,          // primary thread security attributes
+                           TRUE,          // handles are inherited
+                           flag,          // creation flags
+                           NULL,          // use parent's environment
+                           cwd,           // child process's current directory
+                           &siStartInfo,  // STARTUPINFO pointer
+                           &piProcInfo    // receives PROCESS_INFORMATION
+                           )) {
+            {
+                FileLock fl(stdout);
+                fprintf(stderr, "[%d] failed to load engine \"%s\"\n", w->id, run);
+            }
+            DIE_IF(w->id, true);
+        }
 
         // Close handles to the stdin and stdout pipes no longer needed
         DIE_IF(w->id, !CloseHandle(p_stdin[0]));
