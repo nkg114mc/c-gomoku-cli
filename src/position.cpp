@@ -655,17 +655,18 @@ void Position::pos_move_with_copy(Position *after, const Position *before, move_
 // renju helpers
 bool Position::isForbidden(Pos pos)
 {
-    if (isDoubleThree(pos, BLACK))
-        std::cout << "DoubleThree forbidden move: " << CoordX(pos) << ", " << CoordY(pos)
-                  << std::endl;
-    else if (isDoubleFour(pos, BLACK))
-        std::cout << "DoubleFour forbidden move: " << CoordX(pos) << ", " << CoordY(pos)
-                  << std::endl;
-    else if (isOverline(pos, BLACK))
-        std::cout << "Overline forbidden move: " << CoordX(pos) << ", " << CoordY(pos)
-                  << std::endl;
-    return isDoubleThree(pos, BLACK) || isDoubleFour(pos, BLACK)
-           || isOverline(pos, BLACK);
+    bool double_three = isDoubleThree(pos, BLACK);
+    bool double_four  = isDoubleFour(pos, BLACK);
+    bool overline     = isOverline(pos, BLACK);
+
+    if (double_three)
+        printf("DoubleThree forbidden move: %d, %d\n", CoordX(pos), CoordY(pos));
+    else if (double_four)
+        printf("DoubleFour forbidden move: %d, %d\n", CoordX(pos), CoordY(pos));
+    else if (overline)
+        printf("Overline forbidden move: %d, %d\n", CoordX(pos), CoordY(pos));
+
+    return double_three || double_four || overline;
 }
 
 bool Position::isFive(Pos pos, Color piece)
@@ -687,13 +688,13 @@ bool Position::isFive(Pos pos, Color piece, int iDir)
 
     int i, j;
     int count = 1;
-    for (i = 1; i < 5; i++) {
+    for (i = 1; i < 6; i++) {
         if (board[pos - DIRECTION[iDir] * i] == piece)
             count++;
         else
             break;
     }
-    for (j = 1; j < 6 - i; j++) {
+    for (j = 1; j < 7 - i; j++) {
         if (board[pos + DIRECTION[iDir] * j] == piece)
             count++;
         else
