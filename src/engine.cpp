@@ -177,8 +177,8 @@ void Engine::spawn(const char *cwd, const char *run, const char **argv, bool rea
     DIE_IF(w->id, !CloseHandle(piProcInfo.hThread));
 
     // Reopen stdin and stdout pipes using C style FILE
-    int stdin_fd  = _open_osfhandle((intptr_t)p_stdin[1], _O_RDONLY | _O_TEXT);
-    int stdout_fd = _open_osfhandle((intptr_t)p_stdout[0], _O_RDONLY | _O_TEXT);
+    int stdin_fd  = _open_osfhandle((intptr_t)p_stdin[1], _O_TEXT);
+    int stdout_fd = _open_osfhandle((intptr_t)p_stdout[0], _O_TEXT);
     DIE_IF(w->id, stdin_fd == -1);
     DIE_IF(w->id, stdout_fd == -1);
     DIE_IF(w->id, !(this->in = _fdopen(stdout_fd, "r")));
