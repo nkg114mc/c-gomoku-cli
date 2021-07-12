@@ -36,14 +36,14 @@ struct FileLock
 
 #define DIE(...)                      \
     do {                              \
-        FileLock fl(stdout);          \
+        FileLock flOutErr(stdout);    \
         fprintf(stderr, __VA_ARGS__); \
         exit(EXIT_FAILURE);           \
     } while (0)
 
 #define DIE_OR_ERR(die, ...)          \
     do {                              \
-        FileLock fl(stdout);          \
+        FileLock flOutErr(stdout);    \
         fprintf(stderr, __VA_ARGS__); \
         if (die)                      \
             exit(EXIT_FAILURE);       \

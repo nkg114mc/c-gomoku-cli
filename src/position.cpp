@@ -92,13 +92,6 @@ void Position::initBoard(int size)
     winConnectionLen = 0;
 }
 
-// init without size change
-void Position::clear()
-{
-    int oldSize = boardSize;
-    initBoard(oldSize);
-}
-
 Position::Position(int bSize)
 {
     assert(bSize > 0 && bSize <= RealBoardSize);
@@ -167,7 +160,7 @@ void Position::transform(TransformType type)
 }
 
 // Prints the position in ASCII 'art' (for debugging)
-void Position::pos_print() const
+void Position::print() const
 {
     std::cout << "  ";
     for (int i = 0; i < boardSize; i++) {
@@ -514,7 +507,7 @@ bool Position::apply_opening(std::string_view opening_str, OpeningType type)
         return false;
     }
 
-    clear();  // set board to init
+    initBoard(boardSize);  // set board to initial state
     for (size_t i = 0; i < openning_pos.size(); i++) {
         move_t mv = buildMovePos(openning_pos[i], this->get_turn());
         move(mv);  // make opening move
@@ -646,10 +639,10 @@ std::string Position::to_opening_str(OpeningType type) const
 }
 
 // this is a static method
-void Position::pos_move_with_copy(Position *after, const Position *before, move_t m)
+void Position::move_with_copy(const Position &before, move_t m)
 {
-    memcpy(after, before, sizeof(Position));
-    after->move(m);
+    memcpy(this, &before, sizeof(Position));
+    move(m);
 }
 
 // renju helpers

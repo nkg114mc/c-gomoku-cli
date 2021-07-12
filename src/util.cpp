@@ -86,7 +86,7 @@ FileLock::~FileLock()
                        (sizeof(buf) / sizeof(wchar_t)),
                        NULL);
 
-        FileLock fl(stdout);
+        FileLock flOutErr(stdout);
         fprintf(stderr,
                 "[%d] error in %s: (%d). %s (code %d)\n",
                 threadId,
@@ -98,7 +98,9 @@ FileLock::~FileLock()
     }
 #endif
 
-    FileLock fl(stdout);
+    // We lock stdout before writing to stderr so there will be no interleaved
+    // output when stdout and stderr are directed to the same console.
+    FileLock flOutErr(stdout);
     fprintf(stderr,
             "[%d] error in %s: (%d). %s\n",
             threadId,

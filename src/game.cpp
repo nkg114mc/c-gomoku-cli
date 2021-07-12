@@ -205,11 +205,11 @@ int Game::play(const Options &      o,
 
     for (ply = 0;; ei = (1 - ei), ply++) {
         if (played != NONE_MOVE) {
-            Position::pos_move_with_copy(&pos[ply], &pos[ply - 1], played);
+            pos[ply].move_with_copy(pos[ply - 1], played);
         }
 
         if (o.debug) {
-            pos[ply].pos_print();
+            pos[ply].print();
         }
 
         state = game_apply_rules(played);
