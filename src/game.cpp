@@ -277,6 +277,7 @@ int Game::play(const Options &      o,
 
         played = pos[ply].gomostr_to_move(bestmove);
 
+        // Check if move is legal
         if (!pos[ply].is_legal_move(played)) {
             printf("[%d] engine %s output illegal move at %d moves after opening: %s\n",
                    w->id,
@@ -287,7 +288,9 @@ int Game::play(const Options &      o,
             break;
         }
 
-        if (game_rule == RENJU && pos[ply].is_forbidden_move(played)) {
+        // Check forbidden move for Renju rule
+        if (game_rule == RENJU
+            && (forbidden_type = pos[ply].check_forbidden_move(played))) {
             state = STATE_FORBIDDEN_MOVE;
             break;
         }
@@ -384,7 +387,15 @@ void Game::decode_state(std::string &result,
     else if (state == STATE_FORBIDDEN_MOVE) {
         assert(isBlackTurn);
         result = restxt[RESULT_LOSS];
-        reason = "Black play on forbidden position";
+
+        std::string forbiddenMoveType;
+        switch (forbidden_type) {
+        case DOUBLE_THREE: forbiddenMoveType = "double three"; break;
+        case DOUBLE_FOUR: forbiddenMoveType = "double four"; break;
+        case OVERLINE: forbiddenMoveType = "overline"; break;
+        default: assert(false);
+        }
+        reason = format("Black play forbidden move - %s", forbiddenMoveType);
     }
     else if (state == STATE_DRAW_ADJUDICATION)
         reason = "Draw by adjudication";

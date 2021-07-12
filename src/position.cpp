@@ -249,12 +249,12 @@ bool Position::is_legal_move(move_t move) const
     }
 }
 
-bool Position::is_forbidden_move(move_t move) const
+ForbiddenType Position::check_forbidden_move(move_t move) const
 {
     Pos   pos   = PosFromMove(move);
     Color color = ColorFromMove(move);
     if (color != BLACK)
-        return false;
+        return FORBIDDEN_NONE;
 
     // Check forbidden point using recursive finder
     // Note that forbidden point finder needs an empty pos to judge.
@@ -653,20 +653,16 @@ void Position::pos_move_with_copy(Position *after, const Position *before, move_
 }
 
 // renju helpers
-bool Position::isForbidden(Pos pos)
+ForbiddenType Position::isForbidden(Pos pos)
 {
-    bool double_three = isDoubleThree(pos, BLACK);
-    bool double_four  = isDoubleFour(pos, BLACK);
-    bool overline     = isOverline(pos, BLACK);
-
-    if (double_three)
-        printf("DoubleThree forbidden move: %d, %d\n", CoordX(pos), CoordY(pos));
-    else if (double_four)
-        printf("DoubleFour forbidden move: %d, %d\n", CoordX(pos), CoordY(pos));
-    else if (overline)
-        printf("Overline forbidden move: %d, %d\n", CoordX(pos), CoordY(pos));
-
-    return double_three || double_four || overline;
+    if (isDoubleThree(pos, BLACK))
+        return DOUBLE_THREE;
+    else if (isDoubleFour(pos, BLACK))
+        return DOUBLE_FOUR;
+    else if (isOverline(pos, BLACK))
+        return OVERLINE;
+    else
+        return FORBIDDEN_NONE;
 }
 
 bool Position::isFive(Pos pos, Color piece)
