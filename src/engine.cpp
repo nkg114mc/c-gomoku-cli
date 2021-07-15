@@ -92,7 +92,7 @@ void Engine::spawn(const char *cwd, const char *run, const char **argv, bool rea
     saAttr.bInheritHandle       = TRUE;
     saAttr.lpSecurityDescriptor = NULL;
     PROCESS_INFORMATION piProcInfo;
-    STARTUPINFO         siStartInfo;
+    STARTUPINFOA         siStartInfo;
     ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
     ZeroMemory(&siStartInfo, sizeof(STARTUPINFO));
     siStartInfo.cb = sizeof(STARTUPINFO);
@@ -146,8 +146,8 @@ void Engine::spawn(const char *cwd, const char *run, const char **argv, bool rea
         }
 
         const int flag = CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS;
-        // FIXME: fullrun, fullcmd, cwd conversion to LPCWSTR
-        if (!CreateProcess(fullrun,       // application name
+        if (!CreateProcessA(fullrun.c_str(),  // application name
+        if (!CreateProcessA(fullrun,       // application name
                            fullcmd,       // command line (non-const)
                            NULL,          // process security attributes
                            NULL,          // primary thread security attributes
