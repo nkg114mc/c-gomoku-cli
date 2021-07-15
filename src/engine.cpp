@@ -46,6 +46,50 @@
 #include <sstream>
 #include <vector>
 
+#ifdef __MINGW32__
+// Argument quoting is non trivial on Windows: we need to take care of character
+// escaping, and better only add quotes when it is actually needed. Adopted from
+// <https://docs.microsoft.com/en-gb/archive/blogs/twistylittlepassagesallalike/everyone-quotes-command-line-arguments-the-wrong-way>
+static std::string argvQuote(std::string_view arg)
+{
+    std::string cmdline;
+
+    // Don't quote unless we actually need to do so -- hopefully
+    // avoid problems if programs won't parse quotes properly
+    if (!arg.empty() && arg.find_first_of(" \t\n\v\"") == arg.npos)
+        cmdline = arg;
+    else {
+        cmdline.push_back('"');
+
+        for (auto it = arg.begin();; ++it) {
+            unsigned numBlackslashes = 0;
+
+            while (it != arg.end() && *it == '\\') {
+                ++it;
+                ++numBlackslashes;
+            }
+
+            // Escape all backslashes, but let the terminating double quotation
+            // mark we add below be interpreted as a metacharacter.
+            if (it == arg.end()) {
+                cmdline.append(numBlackslashes * 2, '\\');
+                break;
+            }
+            // Escape all backslashes and the following double quotation mark.
+            else if (*it == '"')
+                cmdline.append(numBlackslashes * 2 + 1, '\\').push_back(*it);
+            // Backslashes aren't special here.
+            else
+                cmdline.append(numBlackslashes, '\\').push_back(*it);
+        }
+
+        cmdline.push_back('"');
+    }
+
+    return cmdline;  // NRVO
+}
+#endif
+
 Engine::Engine(Worker *worker, bool debug, std::string *outmsg)
     : w(worker)
     , isDebug(debug)
@@ -62,7 +106,7 @@ void Engine::spawn(const char *cwd, const char *run, const char **argv, bool rea
 {
     assert(argv[0]);
 
-#if defined(__MINGW32__)
+#ifdef __MINGW32__
     // Setup the global job handle and job info, then bind parent process to it.
     // (This will only be called once)
     [[maybe_unused]] static HANDLE handleJob = [this]() {
@@ -92,26 +136,21 @@ void Engine::spawn(const char *cwd, const char *run, const char **argv, bool rea
     saAttr.bInheritHandle       = TRUE;
     saAttr.lpSecurityDescriptor = NULL;
     PROCESS_INFORMATION piProcInfo;
-    STARTUPINFOA         siStartInfo;
+    STARTUPINFOA        siStartInfo;
     ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
     ZeroMemory(&siStartInfo, sizeof(STARTUPINFO));
     siStartInfo.cb = sizeof(STARTUPINFO);
     siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
 
     // Construct full commandline using run and argv
-    char fullrun[MAX_PATH];
-    char fullcmd[32768];
-    strcpy_s(fullrun, cwd);
-    strcat_s(fullrun, run + 1);  // we need an path relative to the cli
+    std::string fullrun, fullcmd;
+    fullrun = format("%s%s", cwd, run + 1);  // we need an path relative to the cli
 
+    // Note: all arguments in argv needs to quoted
     // Use an absolute path for engine argv[0]
-    strcpy_s(fullcmd, "\"");  // path is quoted to deal with directory name with spaces
-    strcat_s(fullcmd, std::filesystem::absolute(fullrun).string().c_str());
-    strcat_s(fullcmd, "\"");
-    for (size_t i = 1; argv[i]; i++) {  // argv[0] == run
-        strcat_s(fullcmd, " ");
-        strcat_s(fullcmd, argv[i]);
-    }
+    fullcmd = argvQuote(std::filesystem::absolute(fullrun).string());
+    for (size_t i = 1; argv[i]; i++)  // argv[0] == run
+        fullcmd += format(" %s", argvQuote(argv[i]));
 
     // Pipe handler: read=0, write=1
     HANDLE p_stdin[2], p_stdout[2];
@@ -147,22 +186,19 @@ void Engine::spawn(const char *cwd, const char *run, const char **argv, bool rea
 
         const int flag = CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS;
         if (!CreateProcessA(fullrun.c_str(),  // application name
-        if (!CreateProcessA(fullrun,       // application name
-                           fullcmd,       // command line (non-const)
-                           NULL,          // process security attributes
-                           NULL,          // primary thread security attributes
-                           TRUE,          // handles are inherited
-                           flag,          // creation flags
-                           NULL,          // use parent's environment
-                           cwd,           // child process's current directory
-                           &siStartInfo,  // STARTUPINFO pointer
-                           &piProcInfo    // receives PROCESS_INFORMATION
-                           )) {
-            {
-                FileLock fl(stdout);
-                fprintf(stderr, "[%d] failed to load engine \"%s\"\n", w->id, run);
-            }
-            DIE_IF(w->id, true);
+                            fullcmd.data(),   // command line (non-const)
+                            nullptr,          // process security attributes
+                            nullptr,          // primary thread security attributes
+                            true,             // handles are inherited
+                            flag,             // creation flags
+                            nullptr,          // use parent's environment
+                            cwd,              // child process's current directory
+                            &siStartInfo,     // STARTUPINFO pointer
+                            &piProcInfo       // receives PROCESS_INFORMATION
+                            )) {
+            // Give a more elaborated error report on wrong engine path
+            DIE_OR_ERR(false, "[%d] failed to load engine \"%s\"\n", w->id, run);
+            DIE_IF(w->id, true);  // extra error message from OS
         }
 
         // Close handles to the stdin and stdout pipes no longer needed
@@ -254,7 +290,21 @@ static void engine_parse_cmd(const char *              cmd,
 {
     // Isolate the first token being the command to run.
     std::string token;
-    const char *tail = string_tok_esc(token, cmd, ' ', '\\');
+
+    // Read a token from source string, returns pointer to the tail string.
+    auto readToken = [&token](const char *src) {
+        if (*src == '"') {
+            // Argument with spaces is assumed to be (esacped) quoted
+            const char *next = string_tok_esc(token, src, '"', '\\');
+            // Skip next space between argv[i] and argv[i+1]
+            return next + (next && *next == ' ');
+        }
+        else
+            return string_tok_esc(token, src, ' ', '\\');
+    };
+
+    // Read argv[0] (engine path)
+    const char *tail = readToken(cmd);
 
     // Split token into (cwd, run). Possible cases:
     // (a) unqualified path, like "demolito" (which evecvp() will search in PATH)
@@ -275,7 +325,7 @@ static void engine_parse_cmd(const char *              cmd,
     // Collect the arguments into a vec of string, args[]
     args.push_back(run);  // argv[0] is the executed command
 
-    while ((tail = string_tok_esc(token, tail, ' ', '\\')))
+    while ((tail = readToken(tail)))
         args.push_back(token);
 }
 

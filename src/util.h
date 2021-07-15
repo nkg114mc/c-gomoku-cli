@@ -34,13 +34,6 @@ struct FileLock
     ~FileLock();
 };
 
-#define DIE(...)                      \
-    do {                              \
-        FileLock flOutErr(stdout);    \
-        fprintf(stderr, __VA_ARGS__); \
-        exit(EXIT_FAILURE);           \
-    } while (0)
-
 #define DIE_OR_ERR(die, ...)          \
     do {                              \
         FileLock flOutErr(stdout);    \
@@ -48,6 +41,8 @@ struct FileLock
         if (die)                      \
             exit(EXIT_FAILURE);       \
     } while (0)
+
+#define DIE(...) DIE_OR_ERR(true, __VA_ARGS__)
 
 [[noreturn]] void die_errno(const int threadId, const char *fileName, int line);
 
