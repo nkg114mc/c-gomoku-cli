@@ -44,6 +44,13 @@ static std::vector<Worker *>      workers;
 static FILE *                     sampleFile;
 static LZ4F_compressionContext_t  sampleFileLz4Ctx;
 
+// Compression preference for binary samples
+static const LZ4F_preferences_t LZ4Pref = {.frameInfo        = {},
+                                           .compressionLevel = 3,
+                                           .autoFlush        = 0,
+                                           .favorDecSpeed    = 0,
+                                           .reserved         = {}};
+
 static void main_destroy(void)
 {
     for (Worker *worker : workers)
@@ -104,7 +111,7 @@ static void main_init(int argc, const char **argv)
                        LZ4F_createCompressionContext(&sampleFileLz4Ctx, LZ4F_VERSION)));
             char   buf[LZ4F_HEADER_SIZE_MAX];
             size_t headerSize =
-                LZ4F_compressBegin(sampleFileLz4Ctx, buf, sizeof(buf), nullptr);
+                LZ4F_compressBegin(sampleFileLz4Ctx, buf, sizeof(buf), &LZ4Pref);
             fwrite(buf, sizeof(char), headerSize, sampleFile);
         }
         else if (options.sp.bin) {
