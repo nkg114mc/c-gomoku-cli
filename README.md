@@ -71,8 +71,9 @@ c-gomoku-cli -each tc=180/30 \
 
  * `cmd=COMMAND`: Set the command to run the engine.
    
-   * The current working directory will be set automatically, if a `/` is contained in `COMMAND`. For example, `cmd=../Engines/Wine2.0`, will run `./Wine2.0` from `../Engines`. If no `/` is found, the command is executed as is. Without `/`, for example `cmd= demoengine` will run `demoengine`, which only works if ` demoengine` command was in `PATH`.
+   * The current working directory will be set automatically, if a `/` is contained in `COMMAND`. For example, `cmd=../Engines/Wine2.0`, will run `./Wine2.0` from `../Engines`. If no `/` is found, the command is executed as is. Without `/`, for example `cmd=demoengine` will run `demoengine`, which only works if ` demoengine` command was in `PATH`.
    * Arguments can be provided as part of the command. For example `"cmd=../fooEngine -foo=1"`. Note that the `""` are needed here, for the command line interpreter to parse the whole string as a single token.
+   * Command line is escaped using backslash (`\`). If you would like to use backslash in engine path on Windows, use a double backslash (`\\`) to replace all original backslash in path.
    
  * `name=NAME`: Set the engine's name. If omitted, the name will be taken from the `ABOUT` values sent by the engine.
 
@@ -161,6 +162,10 @@ int      CoordY(uint16_t move) { return move & 0x1f; }
 ## Acknowledgement
 
 Thanks to lucasart for developing the *c-chess-cli* project. His prior work provides a perfect starting point for the development of c-gomoku-cli. Thanks to Haobin for contributing the support on Windows. It makes c-gomoku-cli avaliable to all Windows based engines.
+
+External library used:
+
++ [LZ4 - Extremely fast compression](https://github.com/lz4/lz4)
 
 ## Contributors
 
