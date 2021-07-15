@@ -561,12 +561,15 @@ void Game::export_samples_bin(FILE *out, LZ4F_compressionContext_t lz4Ctx) const
     {
         struct EntryHead
         {
-            uint16_t boardsize : 5;  // board size
-            uint16_t ply : 9;        // current number of stones on board
             uint16_t result : 2;     // final game result: 0=loss, 1=draw, 2=win
-            uint16_t move;           // move output by the engine
+            uint16_t ply : 9;        // current number of stones on board
+            uint16_t boardsize : 5;  // board size in [5-22]
+            uint16_t rule : 3;       // game rule: 0=freestyle, 1=standard, 4=renju
+            uint16_t move : 13;      // move output by the engine
         } head;
         uint16_t position[1024];  // move sequence that representing a position
+
+        static_assert(sizeof(EntryHead) == 4);
     } e;
     const size_t bufSize = LZ4F_compressBound(sizeof(Entry), nullptr);
     char         buf[bufSize];
@@ -577,6 +580,7 @@ void Game::export_samples_bin(FILE *out, LZ4F_compressionContext_t lz4Ctx) const
         assert(moveply < 1024);
 
         e.head.boardsize = samples[i].pos.get_size();
+        e.head.rule      = game_rule;
         e.head.ply       = moveply;
         e.head.result    = samples[i].result;
         e.head.move      = samples[i].move;
