@@ -123,6 +123,10 @@ size_t string_getline(std::string &out, FILE *in)
         c = _getc_nolock(in);
 #else
         c = getc_unlocked(in);
+
+        // Special case: reading a Windows encoded file (CR+LF) on a POSIX system
+        if (c == '\r')
+            continue;
 #endif
 
         if (c != '\n' && c != EOF)
