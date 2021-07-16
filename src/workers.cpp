@@ -8,7 +8,7 @@
 Worker::Worker(int i, const char *logName) : id(i + 1), seed(i), log(nullptr)
 {
     if (*logName) {
-        log = fopen(logName, FOPEN_WRITE_MODE);
+        log = fopen(logName, "w" FOPEN_TEXT);
         DIE_IF(0, !log);
     }
 }

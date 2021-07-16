@@ -53,17 +53,11 @@ struct FileLock
     }
 
 #ifdef __linux__
-    #define FOPEN_READ_MODE          "re"
-    #define FOPEN_WRITE_MODE         "we"
-    #define FOPEN_WRITE_BINARY_MODE  "we"
-    #define FOPEN_APPEND_MODE        "ae"
-    #define FOPEN_APPEND_BINARY_MODE "ae"
+    #define FOPEN_TEXT   "e"
+    #define FOPEN_BINARY "e"
 #else
-    #define FOPEN_READ_MODE          "rN"
-    #define FOPEN_WRITE_MODE         "wN"
-    #define FOPEN_WRITE_BINARY_MODE  "wbN"
-    #define FOPEN_APPEND_MODE        "aN"
-    #define FOPEN_APPEND_BINARY_MODE "abN"
+    #define FOPEN_TEXT   "N"
+    #define FOPEN_BINARY "bN"
 #endif
 
 /**

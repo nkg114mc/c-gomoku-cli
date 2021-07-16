@@ -92,19 +92,18 @@ static void main_init(int argc, const char **argv)
     openings = new Openings(options.openings.c_str(), options.random, options.srand);
 
     if (!options.pgn.empty())
-        pgnSeqWriter = new SeqWriter(options.pgn.c_str(), FOPEN_APPEND_MODE);
+        pgnSeqWriter = new SeqWriter(options.pgn.c_str(), "a" FOPEN_TEXT);
 
     if (!options.sgf.empty())
-        sgfSeqWriter = new SeqWriter(options.sgf.c_str(), FOPEN_APPEND_MODE);
+        sgfSeqWriter = new SeqWriter(options.sgf.c_str(), "a" FOPEN_TEXT);
 
     if (!options.msg.empty())
-        msgSeqWriter = new SeqWriter(options.msg.c_str(), FOPEN_APPEND_MODE);
+        msgSeqWriter = new SeqWriter(options.msg.c_str(), "a" FOPEN_TEXT);
 
     if (!options.sp.fileName.empty()) {
         if (options.sp.compress) {
             DIE_IF(0,
-                   !(sampleFile =
-                         fopen(options.sp.fileName.c_str(), FOPEN_WRITE_BINARY_MODE)));
+                   !(sampleFile = fopen(options.sp.fileName.c_str(), "w" FOPEN_BINARY)));
             // Init LZ4 context and write file headers
             DIE_IF(0,
                    LZ4F_isError(
@@ -116,12 +115,10 @@ static void main_init(int argc, const char **argv)
         }
         else if (options.sp.bin) {
             DIE_IF(0,
-                   !(sampleFile =
-                         fopen(options.sp.fileName.c_str(), FOPEN_APPEND_BINARY_MODE)));
+                   !(sampleFile = fopen(options.sp.fileName.c_str(), "a" FOPEN_BINARY)));
         }
         else {
-            DIE_IF(0,
-                   !(sampleFile = fopen(options.sp.fileName.c_str(), FOPEN_APPEND_MODE)));
+            DIE_IF(0, !(sampleFile = fopen(options.sp.fileName.c_str(), "a" FOPEN_TEXT)));
         }
     }
 
