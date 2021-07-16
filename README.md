@@ -34,8 +34,6 @@ c-gomoku-cli -each tc=180/30 \
  * `engine OPTIONS`: Add an engine defined by `OPTIONS` to the tournament.
  * `each OPTIONS`: Apply `OPTIONS` to each engine in the tournament.
  * `concurrency N`: Set the maximum number of concurrent games to N (default value 1).
- * `draw COUNT SCORE`: Adjudicate the game as a draw, if the score of both engines is within `SCORE` centipawns from zero, for at least `COUNT` consecutive moves.
- * `resign COUNT SCORE`: Adjudicate the game as a loss, if an engine's score is at least `SCORE` centipawns below zero, for at least `COUNT` consecutive moves.
  * `drawafter N`: Adjudicate the game as a draw, if the number of moves in one game reaches `N` ply. `N` must be greater then `0` to be effective.
  * `rule RULE`: Set the game rule with Gomocup rule code `RULE`.
    * `RULE=0`: Play with gomoku rule and winner wins by five or longer connection.
@@ -66,6 +64,10 @@ c-gomoku-cli -each tc=180/30 \
  * `sgf FILE`: Save a game to `FILE`, in SGF format.
  * `msg FILE`: Save engine messages to `FILE`, in TXT format. Messages in each games are grouped by game index.
  * `sample`. See below.
+
+ <!-- Unimplemented options -->
+ <!-- * ~~`draw COUNT SCORE`: Adjudicate the game as a draw, if the score of both engines is within `SCORE` centipawns from zero, for at least `COUNT` consecutive moves.~~ -->
+ <!-- * ~~`resign COUNT SCORE`: Adjudicate the game as a loss, if an engine's score is at least `SCORE` centipawns below zero, for at least `COUNT` consecutive moves.~~ -->
 
 ### Engine Options
 
