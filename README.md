@@ -133,7 +133,7 @@ Syntax is `-sample [freq=%f] [format=csv|bin|bin_lz4] [file=%s]`. Example `-samp
 
 + `freq` is the sampling frequency (floating point number between `0` and `1`). Defaults to `1` if omitted.
 + `file` is the name of the file where samples are written. Defaults to `sample.[csv|bin|bin.lz4]` if omitted.
-+ `format` is the format in which the file is written. Defaults to `csv`, which is human readable: `Position,Move,Result`. `Position` is the board position in "pos" notation. `Move` is the move in "pos" notation output by the engine. Values for `Result` are `0=loss`, `1=draw`, `2=win`. For binary format `bin` see the section below for details. `bin_lz4` is the same as `bin` format, but the whole file stream is compressed using [LZ4](https://github.com/lz4/lz4) to save disk space (This is suitable for huge training dataset containing millions of positions). Engines are recommended to use LZ4 "Auto Framing" API ([example](https://github.com/lz4/lz4/blob/4f0c7e45c54b7b7e42c16defb764a01129d4a0a8/examples/frameCompress.c#L171)) to decompress the training data.
++ `format` is the format in which the file is written. Defaults to `csv`, which is human readable: `Position,Move,Result`. `Position` is the board position in "pos" notation. `Move` is the move in "pos" notation output by the engine. `Result` is the game outcome from perspective of current side to move, values for `Result` are `0=loss`, `1=draw`, `2=win`. For binary format `bin` see the section below for details. `bin_lz4` is the same as `bin` format, but the whole file stream is compressed using [LZ4](https://github.com/lz4/lz4) to save disk space (This is suitable for huge training dataset containing millions of positions). Engines are recommended to use LZ4 "Auto Framing" API ([example](https://github.com/lz4/lz4/blob/4f0c7e45c54b7b7e42c16defb764a01129d4a0a8/examples/frameCompress.c#L171)) to decompress the training data.
 
 #### Binary format
 
@@ -141,7 +141,7 @@ Binary format uses variable length encoding show below, which is easy to parse f
 
 ```c++
 struct Entry {
-    uint16_t result : 2;    // final game result: 0=loss, 1=draw, 2=win
+    uint16_t result : 2;    // game outcome: 0=loss, 1=draw, 2=win (side to move pov)
     uint16_t ply : 9;       // current number of stones on board
     uint16_t boardsize : 5; // board size in [5-22]
     uint16_t rule : 3;      // game rule: 0=freestyle, 1=standard, 4=renju

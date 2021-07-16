@@ -154,7 +154,8 @@ void Game::compute_time_left(const EngineOptions &eo, int64_t &timeLeft)
             timeLeft += eo.increment;
     }
     else {
-        timeLeft = 2147483647LL;
+        // a time large enough for any nodes/depth limit
+        timeLeft = INT32_MAX;
     }
 }
 
@@ -334,18 +335,19 @@ int Game::play(const Options &      o,
 
     assert(state != STATE_NONE);
 
-    // Signed result from black's pov: -1 (loss), 0 (draw), +1 (win)
-    const int wpov = state < STATE_SEPARATOR ? (pos[ply].get_turn() == BLACK
-                                                    ? RESULT_LOSS
-                                                    : RESULT_WIN)  // lost from turn's pov
-                                             : RESULT_DRAW;
-
     // Fill results in samples
     if (state == STATE_TIME_LOSS || state == STATE_CRASHED
         || state == STATE_ILLEGAL_MOVE) {
         samples.clear();  // discard samples in a time loss/crash/illegal move game
     }
     else {
+        // Signed result from white's pov: 0 (loss), 1 (draw), 2 (win)
+        const int wpov =
+            state < STATE_SEPARATOR
+                ? (pos[ply].get_turn() == WHITE ? RESULT_LOSS
+                                                : RESULT_WIN)  // lost from turn's pov
+                : RESULT_DRAW;
+
         for (size_t i = 0; i < samples.size(); i++)
             samples[i].result = samples[i].pos.get_turn() == WHITE ? wpov : 2 - wpov;
     }
