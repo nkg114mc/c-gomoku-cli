@@ -154,7 +154,8 @@ void Game::compute_time_left(const EngineOptions &eo, int64_t &timeLeft)
             timeLeft += eo.increment;
     }
     else {
-        timeLeft = 2147483647LL;
+        // a time large enough for any nodes/depth limit
+        timeLeft = INT32_MAX;
     }
 }
 
@@ -205,11 +206,11 @@ int Game::play(const Options &      o,
 
     for (ply = 0;; ei = (1 - ei), ply++) {
         if (played != NONE_MOVE) {
-            Position::pos_move_with_copy(&pos[ply], &pos[ply - 1], played);
+            pos[ply].move_with_copy(pos[ply - 1], played);
         }
 
         if (o.debug) {
-            pos[ply].pos_print();
+            pos[ply].print();
         }
 
         state = game_apply_rules(played);
@@ -277,6 +278,7 @@ int Game::play(const Options &      o,
 
         played = pos[ply].gomostr_to_move(bestmove);
 
+        // Check if move is legal
         if (!pos[ply].is_legal_move(played)) {
             printf("[%d] engine %s output illegal move at %d moves after opening: %s\n",
                    w->id,
@@ -287,7 +289,9 @@ int Game::play(const Options &      o,
             break;
         }
 
-        if (game_rule == RENJU && pos[ply].is_forbidden_move(played)) {
+        // Check forbidden move for Renju rule
+        if (game_rule == RENJU
+            && (forbidden_type = pos[ply].check_forbidden_move(played))) {
             state = STATE_FORBIDDEN_MOVE;
             break;
         }
@@ -331,18 +335,19 @@ int Game::play(const Options &      o,
 
     assert(state != STATE_NONE);
 
-    // Signed result from black's pov: -1 (loss), 0 (draw), +1 (win)
-    const int wpov = state < STATE_SEPARATOR ? (pos[ply].get_turn() == BLACK
-                                                    ? RESULT_LOSS
-                                                    : RESULT_WIN)  // lost from turn's pov
-                                             : RESULT_DRAW;
-
     // Fill results in samples
     if (state == STATE_TIME_LOSS || state == STATE_CRASHED
         || state == STATE_ILLEGAL_MOVE) {
         samples.clear();  // discard samples in a time loss/crash/illegal move game
     }
     else {
+        // Signed result from white's pov: 0 (loss), 1 (draw), 2 (win)
+        const int wpov =
+            state < STATE_SEPARATOR
+                ? (pos[ply].get_turn() == WHITE ? RESULT_LOSS
+                                                : RESULT_WIN)  // lost from turn's pov
+                : RESULT_DRAW;
+
         for (size_t i = 0; i < samples.size(); i++)
             samples[i].result = samples[i].pos.get_turn() == WHITE ? wpov : 2 - wpov;
     }
@@ -384,7 +389,15 @@ void Game::decode_state(std::string &result,
     else if (state == STATE_FORBIDDEN_MOVE) {
         assert(isBlackTurn);
         result = restxt[RESULT_LOSS];
-        reason = "Black play on forbidden position";
+
+        std::string forbiddenMoveType;
+        switch (forbidden_type) {
+        case DOUBLE_THREE: forbiddenMoveType = "double three"; break;
+        case DOUBLE_FOUR: forbiddenMoveType = "double four"; break;
+        case OVERLINE: forbiddenMoveType = "overline"; break;
+        default: assert(false);
+        }
+        reason = format("Black play forbidden move - %s", forbiddenMoveType);
     }
     else if (state == STATE_DRAW_ADJUDICATION)
         reason = "Draw by adjudication";
@@ -550,12 +563,15 @@ void Game::export_samples_bin(FILE *out, LZ4F_compressionContext_t lz4Ctx) const
     {
         struct EntryHead
         {
-            uint16_t boardsize : 5;  // board size
-            uint16_t ply : 9;        // current number of stones on board
             uint16_t result : 2;     // final game result: 0=loss, 1=draw, 2=win
-            uint16_t move;           // move output by the engine
+            uint16_t ply : 9;        // current number of stones on board
+            uint16_t boardsize : 5;  // board size in [5-22]
+            uint16_t rule : 3;       // game rule: 0=freestyle, 1=standard, 4=renju
+            uint16_t move : 13;      // move output by the engine
         } head;
         uint16_t position[1024];  // move sequence that representing a position
+
+        static_assert(sizeof(EntryHead) == 4);
     } e;
     const size_t bufSize = LZ4F_compressBound(sizeof(Entry), nullptr);
     char         buf[bufSize];
@@ -566,6 +582,7 @@ void Game::export_samples_bin(FILE *out, LZ4F_compressionContext_t lz4Ctx) const
         assert(moveply < 1024);
 
         e.head.boardsize = samples[i].pos.get_size();
+        e.head.rule      = game_rule;
         e.head.ply       = moveply;
         e.head.result    = samples[i].result;
         e.head.move      = samples[i].move;

@@ -57,6 +57,7 @@ public:
     std::vector<Info>     info;  // remembered from parsing info lines (for PGN comments)
     std::vector<Sample>   samples;    // list of samples when generating training data
     GameRule              game_rule;  // rule is gomoku or renju, etc
+    ForbiddenType         forbidden_type;  // forbidden type of the last move (in renju)
     int                   round, game, ply, state, board_size;
     Worker *const         w;
 

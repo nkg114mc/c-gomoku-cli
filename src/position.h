@@ -39,6 +39,8 @@ const GameRule ALL_VALID_RULES[3] = {GOMOKU_FIVE_OR_MORE, GOMOKU_EXACT_FIVE, REN
 
 enum OpeningType { OPENING_OFFSET, OPENING_POS };
 
+enum ForbiddenType { FORBIDDEN_NONE, DOUBLE_THREE, DOUBLE_FOUR, OVERLINE };
+
 enum TransformType {
     IDENTITY,    // (x, y) -> (x, y)
     ROTATE_90,   // (x, y) -> (y, s - x)
@@ -68,18 +70,17 @@ public:
 
     void move(move_t m);
     void undo();
-
     void transform(TransformType type);
+    void move_with_copy(const Position &before, move_t m);
 
     move_t      gomostr_to_move(std::string_view movestr) const;
     std::string move_to_gomostr(move_t move) const;
     std::string move_to_opening_str(move_t move, OpeningType type) const;
 
-    void clear();
-    void pos_print() const;
+    void print() const;
 
-    bool is_legal_move(move_t move) const;
-    bool is_forbidden_move(move_t move) const;
+    bool          is_legal_move(move_t move) const;
+    ForbiddenType check_forbidden_move(move_t move) const;
 
     bool check_five_in_line_side(Color side,
                                  bool  allow_long_connection = true);  // const;
@@ -89,8 +90,6 @@ public:
     bool        apply_opening(std::string_view opening_str, OpeningType type);
     std::string to_opening_str(OpeningType type) const;
 
-    // static methods
-    static void pos_move_with_copy(Position *after, const Position *before, move_t m);
     static bool is_valid_move_gomostr(std::string_view movestr);
 
 private:
@@ -121,15 +120,15 @@ private:
 
     // renju helpers
     enum OpenFourType { OF_NONE, OF_TRUE /*_OOOO_*/, OF_LONG /*O_OOO_O*/ };
-    bool         isForbidden(Pos pos);
-    bool         isFive(Pos pos, Color piece);
-    bool         isFive(Pos pos, Color piece, int iDir);
-    bool         isOverline(Pos pos, Color piece);
-    bool         isFour(Pos pos, Color piece, int iDir);
-    OpenFourType isOpenFour(Pos pos, Color piece, int iDir);
-    bool         isOpenThree(Pos pos, Color piece, int iDir);
-    bool         isDoubleFour(Pos pos, Color piece);
-    bool         isDoubleThree(Pos pos, Color piece);
+    ForbiddenType isForbidden(Pos pos);
+    bool          isFive(Pos pos, Color piece);
+    bool          isFive(Pos pos, Color piece, int iDir);
+    bool          isOverline(Pos pos, Color piece);
+    bool          isFour(Pos pos, Color piece, int iDir);
+    OpenFourType  isOpenFour(Pos pos, Color piece, int iDir);
+    bool          isOpenThree(Pos pos, Color piece, int iDir);
+    bool          isDoubleFour(Pos pos, Color piece);
+    bool          isDoubleThree(Pos pos, Color piece);
 };
 
 inline Color oppositeColor(Color color)

@@ -361,8 +361,11 @@ void options_print(const Options &o, const std::vector<EngineOptions> &eo)
     std::cout << "msg = " << o.msg << std::endl;
     std::cout << "log = " << o.log << std::endl;
     std::cout << "sample = " << o.sp.fileName << std::endl;
-    if (!o.sp.fileName.empty())
+    if (!o.sp.fileName.empty()) {
+        std::cout << "sample.bin = " << o.sp.bin << std::endl;
+        std::cout << "sample.compress = " << o.sp.compress << std::endl;
         std::cout << "sample.freq = " << o.sp.freq << std::endl;
+    }
     std::cout << "random = " << o.random << std::endl;
     std::cout << "repeat = " << o.repeat << std::endl;
     std::cout << "transform = " << o.transform << std::endl;

@@ -34,8 +34,6 @@ c-gomoku-cli -each tc=180/30 \
  * `engine OPTIONS`: Add an engine defined by `OPTIONS` to the tournament.
  * `each OPTIONS`: Apply `OPTIONS` to each engine in the tournament.
  * `concurrency N`: Set the maximum number of concurrent games to N (default value 1).
- * `draw COUNT SCORE`: Adjudicate the game as a draw, if the score of both engines is within `SCORE` centipawns from zero, for at least `COUNT` consecutive moves.
- * `resign COUNT SCORE`: Adjudicate the game as a loss, if an engine's score is at least `SCORE` centipawns below zero, for at least `COUNT` consecutive moves.
  * `drawafter N`: Adjudicate the game as a draw, if the number of moves in one game reaches `N` ply. `N` must be greater then `0` to be effective.
  * `rule RULE`: Set the game rule with Gomocup rule code `RULE`.
    * `RULE=0`: Play with gomoku rule and winner wins by five or longer connection.
@@ -67,12 +65,17 @@ c-gomoku-cli -each tc=180/30 \
  * `msg FILE`: Save engine messages to `FILE`, in TXT format. Messages in each games are grouped by game index.
  * `sample`. See below.
 
+ <!-- Unimplemented options -->
+ <!-- * ~~`draw COUNT SCORE`: Adjudicate the game as a draw, if the score of both engines is within `SCORE` centipawns from zero, for at least `COUNT` consecutive moves.~~ -->
+ <!-- * ~~`resign COUNT SCORE`: Adjudicate the game as a loss, if an engine's score is at least `SCORE` centipawns below zero, for at least `COUNT` consecutive moves.~~ -->
+
 ### Engine Options
 
  * `cmd=COMMAND`: Set the command to run the engine.
    
-   * The current working directory will be set automatically, if a `/` is contained in `COMMAND`. For example, `cmd=../Engines/Wine2.0`, will run `./Wine2.0` from `../Engines`. If no `/` is found, the command is executed as is. Without `/`, for example `cmd= demoengine` will run `demoengine`, which only works if ` demoengine` command was in `PATH`.
+   * The current working directory will be set automatically, if a `/` is contained in `COMMAND`. For example, `cmd=../Engines/Wine2.0`, will run `./Wine2.0` from `../Engines`. If no `/` is found, the command is executed as is. Without `/`, for example `cmd=demoengine` will run `demoengine`, which only works if ` demoengine` command was in `PATH`.
    * Arguments can be provided as part of the command. For example `"cmd=../fooEngine -foo=1"`. Note that the `""` are needed here, for the command line interpreter to parse the whole string as a single token.
+   * Command line is escaped using backslash (`\`). If you would like to use backslash in engine path on Windows, use a double backslash (`\\`) to replace all original backslash in path.
    
  * `name=NAME`: Set the engine's name. If omitted, the name will be taken from the `ABOUT` values sent by the engine.
 
@@ -132,34 +135,39 @@ Syntax is `-sample [freq=%f] [format=csv|bin|bin_lz4] [file=%s]`. Example `-samp
 
 + `freq` is the sampling frequency (floating point number between `0` and `1`). Defaults to `1` if omitted.
 + `file` is the name of the file where samples are written. Defaults to `sample.[csv|bin|bin.lz4]` if omitted.
-+ `format` is the format in which the file is written. Defaults to `csv`, which is human readable: `Pos,Move,Result`. `Pos` is the position in "pos" notation. `Move` is the move in "pos" notation output by the engine. Values for `Result` are `0=loss`, `1=draw`, `2=win`. For binary format `bin` see the section below for details. `bin_lz4` is the same as `bin` format, but the whole file stream is compressed using [LZ4](https://github.com/lz4/lz4) to save disk space (This is suitable for huge training dataset containing millions of positions). Engines are recommended to use LZ4 "Auto Framing" API ([example](https://github.com/lz4/lz4/blob/4f0c7e45c54b7b7e42c16defb764a01129d4a0a8/examples/frameCompress.c#L171)) to decompress the training data.
++ `format` is the format in which the file is written. Defaults to `csv`, which is human readable: `Position,Move,Result`. `Position` is the board position in "pos" notation. `Move` is the move in "pos" notation output by the engine. `Result` is the game outcome from perspective of current side to move, values for `Result` are `0=loss`, `1=draw`, `2=win`. For binary format `bin` see the section below for details. `bin_lz4` is the same as `bin` format, but the whole file stream is compressed using [LZ4](https://github.com/lz4/lz4) to save disk space (This is suitable for huge training dataset containing millions of positions). Engines are recommended to use LZ4 "Auto Framing" API ([example](https://github.com/lz4/lz4/blob/4f0c7e45c54b7b7e42c16defb764a01129d4a0a8/examples/frameCompress.c#L171)) to decompress the training data.
 
 #### Binary format
 
-Binary format uses variable length encoding show below, which is easy to parse for engines. Each entry has a length of `4+ply` bytes. Position is represented by a move sequence that black plays first. Note that move sequence is always the same as the actual game records, since in Renju rule we need proper move order to find forbidden points.
+Binary format uses variable length encoding show below, which is easy to parse for engines. Each entry has a length of `4+ply` bytes. Position is represented by a move sequence that black plays first. Move sequence is guaranteed to have the same order as the actual game record.
 
 ```c++
 struct Entry {
-    uint16_t boardsize : 5; // board size
+    uint16_t result : 2;    // game outcome: 0=loss, 1=draw, 2=win (side to move pov)
     uint16_t ply : 9;       // current number of stones on board
-    uint16_t result : 2;    // final game result: 0=loss, 1=draw, 2=win
-    uint16_t move;          // move output by the engine
+    uint16_t boardsize : 5; // board size in [5-22]
+    uint16_t rule : 3;      // game rule: 0=freestyle, 1=standard, 4=renju
+    uint16_t move : 13;     // move output by the engine
     uint16_t position[ply]; // move sequence that representing a position
 };
 ```
 
-Each move is represented by a 16bit unsigned integer, constructed using two index `x` and `y` using `uint16_t move = (x << 5) | y;`. Below is a code snippet that does transform between move and coordinate.
+Each move is represented by a 16bit unsigned integer. It's lower 10 bits are constructed with two index `x` and `y` using `uint16_t move = (x << 5) | y;`. Below is a code snippet that does transform between the packed move and two coordinates.
 
 ```c
 uint16_t Move(int x, int y)    { return (x << 5) | y; }
-int      CoordX(uint16_t move) { return (move >> 5); }
-int      CoordY(uint16_t move) { return (move & ((1 << 5) - 1)); }
+int      CoordX(uint16_t move) { return (move >> 5) & 0x1f; }
+int      CoordY(uint16_t move) { return move & 0x1f; }
 ```
 
 
 ## Acknowledgement
 
 Thanks to lucasart for developing the *c-chess-cli* project. His prior work provides a perfect starting point for the development of c-gomoku-cli. Thanks to Haobin for contributing the support on Windows. It makes c-gomoku-cli avaliable to all Windows based engines.
+
+External library used:
+
++ [LZ4 - Extremely fast compression](https://github.com/lz4/lz4)
 
 ## Contributors
 

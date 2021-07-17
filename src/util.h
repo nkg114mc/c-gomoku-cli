@@ -34,20 +34,15 @@ struct FileLock
     ~FileLock();
 };
 
-#define DIE(...)                      \
-    do {                              \
-        FileLock fl(stdout);          \
-        fprintf(stderr, __VA_ARGS__); \
-        exit(EXIT_FAILURE);           \
-    } while (0)
-
 #define DIE_OR_ERR(die, ...)          \
     do {                              \
-        FileLock fl(stdout);          \
+        FileLock flOutErr(stdout);    \
         fprintf(stderr, __VA_ARGS__); \
         if (die)                      \
             exit(EXIT_FAILURE);       \
     } while (0)
+
+#define DIE(...) DIE_OR_ERR(true, __VA_ARGS__)
 
 [[noreturn]] void die_errno(const int threadId, const char *fileName, int line);
 
@@ -58,17 +53,11 @@ struct FileLock
     }
 
 #ifdef __linux__
-    #define FOPEN_READ_MODE          "re"
-    #define FOPEN_WRITE_MODE         "we"
-    #define FOPEN_WRITE_BINARY_MODE  "we"
-    #define FOPEN_APPEND_MODE        "ae"
-    #define FOPEN_APPEND_BINARY_MODE "ae"
+    #define FOPEN_TEXT   "e"
+    #define FOPEN_BINARY "e"
 #else
-    #define FOPEN_READ_MODE          "rN"
-    #define FOPEN_WRITE_MODE         "wN"
-    #define FOPEN_WRITE_BINARY_MODE  "wbN"
-    #define FOPEN_APPEND_MODE        "aN"
-    #define FOPEN_APPEND_BINARY_MODE "abN"
+    #define FOPEN_TEXT   "N"
+    #define FOPEN_BINARY "bN"
 #endif
 
 /**

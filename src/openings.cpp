@@ -24,7 +24,7 @@
 Openings::Openings(const char *fileName, bool random, uint64_t srand) : file(nullptr)
 {
     if (*fileName) {
-        DIE_IF(0, !(file = fopen(fileName, FOPEN_READ_MODE)));
+        DIE_IF(0, !(file = fopen(fileName, "r" FOPEN_TEXT)));
     }
 
     if (file) {

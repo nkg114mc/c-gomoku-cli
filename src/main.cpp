@@ -44,6 +44,13 @@ static std::vector<Worker *>      workers;
 static FILE *                     sampleFile;
 static LZ4F_compressionContext_t  sampleFileLz4Ctx;
 
+// Compression preference for binary samples
+static const LZ4F_preferences_t LZ4Pref = {.frameInfo        = {},
+                                           .compressionLevel = 3,
+                                           .autoFlush        = 0,
+                                           .favorDecSpeed    = 0,
+                                           .reserved         = {}};
+
 static void main_destroy(void)
 {
     for (Worker *worker : workers)
@@ -85,36 +92,33 @@ static void main_init(int argc, const char **argv)
     openings = new Openings(options.openings.c_str(), options.random, options.srand);
 
     if (!options.pgn.empty())
-        pgnSeqWriter = new SeqWriter(options.pgn.c_str(), FOPEN_APPEND_MODE);
+        pgnSeqWriter = new SeqWriter(options.pgn.c_str(), "a" FOPEN_TEXT);
 
     if (!options.sgf.empty())
-        sgfSeqWriter = new SeqWriter(options.sgf.c_str(), FOPEN_APPEND_MODE);
+        sgfSeqWriter = new SeqWriter(options.sgf.c_str(), "a" FOPEN_TEXT);
 
     if (!options.msg.empty())
-        msgSeqWriter = new SeqWriter(options.msg.c_str(), FOPEN_APPEND_MODE);
+        msgSeqWriter = new SeqWriter(options.msg.c_str(), "a" FOPEN_TEXT);
 
     if (!options.sp.fileName.empty()) {
         if (options.sp.compress) {
             DIE_IF(0,
-                   !(sampleFile =
-                         fopen(options.sp.fileName.c_str(), FOPEN_WRITE_BINARY_MODE)));
+                   !(sampleFile = fopen(options.sp.fileName.c_str(), "w" FOPEN_BINARY)));
             // Init LZ4 context and write file headers
             DIE_IF(0,
                    LZ4F_isError(
                        LZ4F_createCompressionContext(&sampleFileLz4Ctx, LZ4F_VERSION)));
             char   buf[LZ4F_HEADER_SIZE_MAX];
             size_t headerSize =
-                LZ4F_compressBegin(sampleFileLz4Ctx, buf, sizeof(buf), nullptr);
+                LZ4F_compressBegin(sampleFileLz4Ctx, buf, sizeof(buf), &LZ4Pref);
             fwrite(buf, sizeof(char), headerSize, sampleFile);
         }
         else if (options.sp.bin) {
             DIE_IF(0,
-                   !(sampleFile =
-                         fopen(options.sp.fileName.c_str(), FOPEN_APPEND_BINARY_MODE)));
+                   !(sampleFile = fopen(options.sp.fileName.c_str(), "a" FOPEN_BINARY)));
         }
         else {
-            DIE_IF(0,
-                   !(sampleFile = fopen(options.sp.fileName.c_str(), FOPEN_APPEND_MODE)));
+            DIE_IF(0, !(sampleFile = fopen(options.sp.fileName.c_str(), "a" FOPEN_TEXT)));
         }
     }
 
