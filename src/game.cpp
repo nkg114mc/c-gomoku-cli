@@ -587,7 +587,8 @@ void Game::export_samples_bin(FILE *out, LZ4F_compressionContext_t lz4Ctx) const
         e.head.result    = samples[i].result;
         e.head.move      = samples[i].move;
         for (int iMove = 0; iMove < moveply; iMove++) {
-            e.position[iMove] = PosFromMove(hist_moves[iMove]);
+            Pos pos           = PosFromMove(hist_moves[iMove]);
+            e.position[iMove] = POS_RAW(CoordX(pos), CoordY(pos));
         }
 
         const size_t entrySize = sizeof(Entry::EntryHead) + sizeof(uint16_t) * moveply;
