@@ -432,7 +432,6 @@ std::string Game::export_pgn(size_t gameIdx, int verbosity) const
     out += format("%s\n", timeBuffer);
 
     out += format("[Round \"%i.%i\"]\n", round + 1, game + 1);
-    out += format("[Round \"%i.%i\"]\n", round + 1, game + 1);
     out += format("[Black \"%s\"]\n", names[BLACK]);
     out += format("[White \"%s\"]\n", names[WHITE]);
 
