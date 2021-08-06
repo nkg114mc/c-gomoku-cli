@@ -1,7 +1,8 @@
 CC=g++
 #CXXFLAGS+= -g -DDEBUG
 CXXFLAGS+= -DNDEBUG
-CXXFLAGS+= -std=c++17 -O2 -fno-exceptions -fno-rtti -msse4.2 -pthread -lm -m64 -DIS_64BIT -flto -Wall -Wcast-qual -Wextra -Wshadow -fstrict-aliasing -Wno-attributes
+CXXFLAGS+= -std=c++17 -O2 -fno-exceptions -fno-rtti -msse4.2 -pthread -lm -m64 -flto -static -s -DIS_64BIT
+CXXFLAGS+= -Wall -Wcast-qual -Wextra -Wshadow -fstrict-aliasing -Wno-attributes
 
 
 OBJFOLD=obj
