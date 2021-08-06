@@ -39,7 +39,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <filesystem>
 #include <iostream>
 #include <mutex>
 #include <signal.h>
@@ -138,8 +137,8 @@ void Engine::spawn(const char *cwd, const char *run, const char **argv, bool rea
     PROCESS_INFORMATION piProcInfo;
     STARTUPINFOA        siStartInfo;
     ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
-    ZeroMemory(&siStartInfo, sizeof(STARTUPINFO));
-    siStartInfo.cb = sizeof(STARTUPINFO);
+    ZeroMemory(&siStartInfo, sizeof(STARTUPINFOA));
+    siStartInfo.cb = sizeof(STARTUPINFOA);
     siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
 
     // Construct full commandline using run and argv
@@ -148,7 +147,11 @@ void Engine::spawn(const char *cwd, const char *run, const char **argv, bool rea
 
     // Note: all arguments in argv needs to quoted
     // Use an absolute path for engine argv[0]
-    fullcmd = argvQuote(std::filesystem::absolute(fullrun).string());
+    char absPathBuf[4096];
+    DIE_IF(w->id,
+           !GetFullPathNameA(fullrun.c_str(), sizeof(absPathBuf), absPathBuf, nullptr));
+
+    fullcmd = argvQuote(absPathBuf);
     for (size_t i = 1; argv[i]; i++)  // argv[0] == run
         fullcmd += format(" %s", argvQuote(argv[i]));
 
