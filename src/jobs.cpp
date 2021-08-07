@@ -80,6 +80,8 @@ JobQueue::JobQueue(int engines, int rounds, int games, bool gauntlet)
                     job_queue_init_pair(games, e1, e2, pair++, added, r, jobs);
         }
     }
+
+    startedTime = system_msec();
 }
 
 bool JobQueue::pop(Job &j, size_t &idx_in, size_t &count)
@@ -137,6 +139,7 @@ void JobQueue::print_results(size_t frequency)
     if (completed && completed % frequency == 0) {
         std::string out = "Tournament update:\n";
 
+        // Print out tournament results up to now
         for (size_t i = 0; i < results.size(); i++) {
             const Result r = results[i];
             const int    n =
@@ -156,6 +159,24 @@ void JobQueue::print_results(size_t frequency)
                               score,
                               n);
             }
+        }
+
+        // Print out average match speed and estimated time to complete (ETA)
+        if (idx < jobs.size()) {
+            assert(idx > 0);
+            int64_t elapsed = system_msec() - startedTime;
+            double  speed   = idx / std::max<double>(elapsed, 1.0);  // avoid divide by 0
+            int64_t eta     = int64_t((jobs.size() - idx) / speed);
+            int64_t etaHour = eta / 3600000;
+            int64_t etaMinate = (eta % 3600000) / 60000;
+            int64_t etaSecond = ((eta % 3600000) % 60000) / 1000;
+
+            out += format("Matches/min: %.3lf, Estimated time to complete: %02" PRId64
+                          ":%02" PRId64 ":%02" PRId64 "\n",
+                          speed * 60000.0,
+                          etaHour,
+                          etaMinate,
+                          etaSecond);
         }
 
         fputs(out.c_str(), stdout);

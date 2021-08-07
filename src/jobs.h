@@ -58,4 +58,5 @@ public:
     std::vector<std::string> names;
     size_t                   idx;        // next job index
     size_t                   completed;  // number of jobs completed
+    int64_t                  startedTime;
 };
