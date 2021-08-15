@@ -67,8 +67,8 @@ struct EngineOptions
     int64_t nodes = 0;
     int     depth = 0;
 
-    // default thread num is 1
-    int numThreads = 1;
+    // default thread num (0 as not set)
+    int numThreads = 0;
 
     // default max memory is set to 350MB (same as Gomocup)
     int64_t maxMemory = 367001600;

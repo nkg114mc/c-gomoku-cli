@@ -112,7 +112,7 @@ void Game::gomocup_game_info_command(const EngineOptions &eo,
     engine.writeln(format("INFO max_memory %" PRId64, eo.maxMemory).c_str());
 
     // multi threading info
-    if (eo.numThreads > 1)
+    if (eo.numThreads)
         engine.writeln(format("INFO thread_num %i", eo.numThreads).c_str());
 
     // custom info
