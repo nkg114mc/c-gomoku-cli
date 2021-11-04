@@ -584,7 +584,7 @@ void Game::export_samples_bin(FILE *out, LZ4F_compressionContext_t lz4Ctx) const
         e.head.rule      = game_rule;
         e.head.ply       = moveply;
         e.head.result    = samples[i].result;
-        e.head.move      = samples[i].move;
+        e.head.move      = POS_RAW(CoordX(samples[i].move), CoordY(samples[i].move));
         for (int iMove = 0; iMove < moveply; iMove++) {
             Pos pos           = PosFromMove(hist_moves[iMove]);
             e.position[iMove] = POS_RAW(CoordX(pos), CoordY(pos));
